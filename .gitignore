@@ -1,0 +1,15 @@
+.*nv
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.playwright/
+artifacts/
+*.log
+.DS_Store
+.claude/settings.local.json
+.unlazy/
+.unlazy-hook-state.json
+# Runtime cache is ignored; reproducible sample-home cache entries are committed.
+cache/*
+!cache/sample-*.json

@@ -1,0 +1,2 @@
+# Install after creating the project virtual environment.
+daytona
