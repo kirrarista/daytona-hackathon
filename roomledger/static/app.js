@@ -10,6 +10,7 @@
     sports: 0.16, musical: 0.08, other: 0.15,
   };
   const CONDITION_FACTOR = { new: 1, good: 0.85, fair: 0.65, poor: 0.35 };
+  const FX_JPY_PER_USD = 150; // Explicit indicative rate; no live FX dependency.
   const FIXES = {
     tension_poles: { en: "Tension poles", ja: "突っ張り棒", unit: 2400 },
     l_brackets: { en: "L-brackets", ja: "L字金具", unit: 1200 },
@@ -287,6 +288,7 @@
     timestampUnavailable: { en: "Timestamp unavailable", ja: "タイムスタンプなし" },
     product: { en: "Product", ja: "製品" },
     estimatedJpy: { en: "Estimated JPY", ja: "概算 JPY" },
+    estimatedCurrency: { en: "Estimated {currency}", ja: "概算 {currency}" },
     perYear: { en: "% per year", ja: "%／年" },
     reportTitle: { en: "RoomLedger evidence report", ja: "RoomLedger 証拠レポート" },
     printSavePdf: { en: "Print / Save PDF", ja: "印刷 / PDF保存" },
@@ -313,6 +315,11 @@
     startupRemoved: { en: "Startup removed {count} leftover RoomLedger sandboxes", ja: "起動時に残っていた{count}個のRoomLedgerサンドボックスを削除しました" },
     startupSweepFailed: { en: "Daytona orphan sweep could not complete: {error}", ja: "Daytonaの孤立サンドボックス削除を完了できませんでした: {error}" },
     deletionReviewType: { en: "Deletion needs review: {error}", ja: "削除状態の確認が必要です: {error}" },
+    switchCurrencyJpy: { en: "Switch currency to Japanese yen", ja: "日本円に切り替える" },
+    switchCurrencyUsd: { en: "Switch currency to US dollars", ja: "米ドルに切り替える" },
+    replacementPriceCurrency: { en: "Replacement price ({currency})", ja: "再調達価額（{currency}）" },
+    invalidEditCurrency: { en: "Enter an item label and a replacement price from 0 to {max} {currency}.", ja: "項目名と、0〜{max} {currency}の再調達価額を入力してください。" },
+    fxNote: { en: "Display currency: {currency} · indicative rate: 1 USD ≈ 150 JPY · display conversions are approximate, not a live exchange quote", ja: "表示通貨: {currency} · 参考換算レート: 1 USD ≈ 150 JPY · 概算表示で、リアルタイムの為替レートではありません" },
     closeEditor: { en: "Close editor", ja: "編集を閉じる" },
     dismissSummary: { en: "Dismiss summary", ja: "完了メッセージを閉じる" },
   };
@@ -355,6 +362,7 @@
     selectedItem: null,
     mode: "insurance",
     language: document.documentElement.dataset.language === "ja" ? "ja" : "en",
+    currency: document.documentElement.dataset.currency === "JPY" ? "JPY" : "USD",
     summary: null,
     done: false,
     interrupted: false,
@@ -367,9 +375,20 @@
     toast: null,
   };
 
-  const money0 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-  const money2 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const yen = new Intl.NumberFormat("en-US", { style: "currency", currency: "JPY", maximumFractionDigits: 0 });
+  function formatMoney(amount, digits = 0, source = "USD") {
+    const numeric = finite(amount);
+    const usd = source === "JPY" ? numeric / FX_JPY_PER_USD : numeric;
+    const value = state.currency === "JPY" ? usd * FX_JPY_PER_USD : usd;
+    const locale = state.language === "ja" ? "ja-JP" : "en-US";
+    const fractionDigits = state.currency === "JPY" ? 0 : digits;
+    return new Intl.NumberFormat(locale, { style: "currency", currency: state.currency,
+      minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(value);
+  }
+
+  // Domain values passed to money0/money2 are USD; values passed to yen are JPY.
+  const money0 = { format: (value) => formatMoney(value, 0, "USD") };
+  const money2 = { format: (value) => formatMoney(value, 2, "USD") };
+  const yen = { format: (value) => formatMoney(value, 2, "JPY") };
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -551,6 +570,41 @@
     // Flush once, then restore transitions on the following frame (not a color smear).
     void document.body.offsetWidth;
     requestAnimationFrame(() => root.classList.remove("theme-switching"));
+  }
+
+  function editorInputFromUsd(value) {
+    const converted = state.currency === "JPY" ? finite(value) * FX_JPY_PER_USD : finite(value);
+    return String(state.currency === "JPY" ? Math.round(converted) : Math.round(converted * 100) / 100);
+  }
+
+  function editorUsdValue() {
+    return state.currency === "JPY" ? finite($("edit-price").value) / FX_JPY_PER_USD : finite($("edit-price").value);
+  }
+
+  function renderCurrencyUI(convertEditor = false, previousUsd = null) {
+    const next = state.currency === "JPY" ? "USD" : "JPY";
+    $("currency-label").textContent = next === "JPY" ? "¥ JPY" : "$ USD";
+    $("currency-toggle").setAttribute("aria-label", sharedText(next === "JPY" ? "switchCurrencyJpy" : "switchCurrencyUsd"));
+    $("currency-toggle").title = sharedText("fxNote", { currency: state.currency });
+    $("currency-toggle").setAttribute("aria-pressed", String(state.currency === "JPY"));
+    $("currency-note").textContent = sharedText("fxNote", { currency: state.currency });
+    document.querySelector('label[for="edit-price"]').textContent = sharedText("replacementPriceCurrency", { currency: state.currency });
+    $("edit-price").step = state.currency === "JPY" ? "1" : "0.01";
+    if ($("item-dialog").open) {
+      if (convertEditor) $("edit-price").value = editorInputFromUsd(previousUsd ?? 0);
+      updateAcvPreview();
+    }
+  }
+
+  function setCurrency(currency) {
+    const selected = currency === "JPY" ? "JPY" : "USD";
+    if (selected === state.currency) return;
+    const previousUsd = $("item-dialog").open ? editorUsdValue() : null;
+    state.currency = selected; // Deliberately independent from state.language.
+    document.documentElement.dataset.currency = selected;
+    try { localStorage.setItem("roomledger-currency", selected); } catch (_) { /* Currency still works without storage. */ }
+    renderCurrencyUI(previousUsd !== null, previousUsd);
+    if (activeRoom()) refreshInventory();
   }
 
   function updateExportAvailability() {
@@ -1453,6 +1507,7 @@
   }
 
   function refreshLanguageState() {
+    renderCurrencyUI();
     updateEnvironmentText();
     if (state.meta) {
       $("run-context").textContent = contextForMeta(state.meta);
@@ -1470,7 +1525,7 @@
     if ($("item-dialog").open) {
       const found = findItem($("edit-item-id").value);
       if (found) $("item-dialog-title").textContent = sharedText("editItemNumber", { number: found.item.index });
-      if (!$("edit-error").hidden) $("edit-error").textContent = sharedText("invalidEdit");
+      if (!$("edit-error").hidden) $("edit-error").textContent = sharedText("invalidEditCurrency", { max: state.currency === "JPY" ? 1000000 * FX_JPY_PER_USD : 1000000, currency: state.currency });
     }
     if ($("delete-dialog").open) {
       const found = findItem($("edit-item-id").value);
@@ -1496,7 +1551,7 @@
     const { item } = found;
     $("edit-item-id").value = item.id;
     $("edit-label").value = item.label;
-    $("edit-price").value = String(item.replacement_usd);
+    $("edit-price").value = editorInputFromUsd(item.replacement_usd);
     $("edit-condition").value = item.condition;
     $("edit-receipt").checked = Boolean(item.receipt);
     $("edit-error").hidden = true;
@@ -1509,7 +1564,7 @@
   function updateAcvPreview() {
     const found = findItem($("edit-item-id").value);
     if (!found) return;
-    const preview = { ...found.item, replacement_usd: Math.max(0, finite($("edit-price").value)), condition: $("edit-condition").value };
+    const preview = { ...found.item, replacement_usd: Math.max(0, editorUsdValue()), condition: $("edit-condition").value };
     $("edit-acv-preview").textContent = money2.format(acvFor(preview));
   }
 
@@ -1518,14 +1573,15 @@
     const found = findItem($("edit-item-id").value);
     if (!found) return;
     const label = $("edit-label").value.trim();
-    const price = Number($("edit-price").value);
-    if (!label || !Number.isFinite(price) || price < 0 || price > 1000000) {
-      $("edit-error").textContent = sharedText("invalidEdit");
+    const displayPrice = Number($("edit-price").value);
+    const replacementUsd = state.currency === "JPY" ? displayPrice / FX_JPY_PER_USD : displayPrice;
+    if (!label || !Number.isFinite(displayPrice) || displayPrice < 0 || replacementUsd > 1000000) {
+      $("edit-error").textContent = sharedText("invalidEditCurrency", { max: state.currency === "JPY" ? 1000000 * FX_JPY_PER_USD : 1000000, currency: state.currency });
       $("edit-error").hidden = false;
       return;
     }
     found.item.label = label.slice(0, 160);
-    found.item.replacement_usd = Math.round(price * 100) / 100;
+    found.item.replacement_usd = Math.round(replacementUsd * 100) / 100;
     found.item.condition = $("edit-condition").value;
     found.item.receipt = $("edit-receipt").checked;
     found.item.acv_usd = acvFor(found.item);
@@ -1581,11 +1637,12 @@
   }
 
   function exportCsv() {
-    const rows = [["room", "item", "category", "condition", "replacement", "ACV", "verified", "receipt", "fingerprint"]];
+    const rows = [["room", "item", "category", "condition", "replacement", "ACV", "currency", "fx_jpy_per_usd", "verified", "receipt", "fingerprint"]];
+    const amountCell = (usd) => (state.currency === "JPY" ? finite(usd) * FX_JPY_PER_USD : finite(usd)).toFixed(state.currency === "JPY" ? 0 : 2);
     allRooms().forEach((room) => [...room.items].sort((a, b) => a.index - b.index).forEach((item) => {
       rows.push([
         room.name, item.label, item.category, item.condition,
-        finite(item.replacement_usd).toFixed(2), acvFor(item).toFixed(2),
+        amountCell(item.replacement_usd), amountCell(acvFor(item)), state.currency, FX_JPY_PER_USD,
         item.verified ? "true" : "false", item.receipt ? "true" : "false", room.sha256 || "",
       ]);
     }));
@@ -1634,10 +1691,10 @@
       const legend = [...room.items].sort((a, b) => a.index - b.index).map((item) => `<li><span class="number">${item.index}</span><span><strong>${escapeHtml(item.label)}</strong> <span class="${item.risk}">${escapeHtml(riskLabel(item.risk))}</span>${sleepingPriority(room, item) ? `<br><span class="sleeping">${escapeHtml(t("sleeping"))}</span>` : ""}${item.fix_keys.length && item.risk !== "low" ? `<br><span class="footnote">${escapeHtml(t("recommendedFix"))}: ${escapeHtml(item.fix_keys.map(fixName).join(" · "))}</span>` : ""}</span><span>${escapeHtml(money0.format(item.replacement_usd))}</span></li>`).join("");
       return `<section class="room-break"><h2>${room.index + 1}. ${escapeHtml(room.name)}</h2><div class="room-meta"><span>${escapeHtml(roomTypeLabel(room))} · ${escapeHtml(localizedItemCount(room.items.length))} · ${room.width} × ${room.height}</span><span>${escapeHtml(sharedText(room.metadata_removed ? "gpsMetadataRemoved" : "sanitizedJpeg"))}</span></div><div class="room-photo">${url ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(sharedText("photoEvidenceAlt", { room: room.name }))}">` : ""}<svg viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="${escapeHtml(sharedText("numberedBoxes"))}">${reportBoxes(room)}</svg></div><p class="fingerprints"><strong>${escapeHtml(sharedText("photoEvidenceFingerprint"))}</strong><br>SHA-256 ${escapeHtml(room.sha256 || sharedText("unavailable"))}<br>${escapeHtml(room.captured_at || sharedText("timestampUnavailable"))}</p><ul class="legend">${legend || `<li>${escapeHtml(sharedText("noItemsRoom"))}</li>`}</ul></section>`;
     }).join("");
-    const fixes = shopping.length ? `<table class="shopping"><thead><tr><th>${escapeHtml(state.language === "ja" ? JA.quantity : "Quantity")}</th><th>${escapeHtml(sharedText("product"))}</th><th class="num">${escapeHtml(sharedText("estimatedJpy"))}</th></tr></thead><tbody>${shopping.map((row) => `<tr><td>× ${row.quantity}</td><td>${escapeHtml(fixName(row.key))}</td><td class="num">${escapeHtml(yen.format(row.total))}</td></tr>`).join("")}</tbody></table><p><strong>${escapeHtml(yen.format(shoppingTotal))}</strong> ${escapeHtml(t("estimated"))}</p>` : `<p>${escapeHtml(t("noFixes"))}</p>`;
+    const fixes = shopping.length ? `<table class="shopping"><thead><tr><th>${escapeHtml(state.language === "ja" ? JA.quantity : "Quantity")}</th><th>${escapeHtml(sharedText("product"))}</th><th class="num">${escapeHtml(sharedText("estimatedCurrency", { currency: state.currency }))}</th></tr></thead><tbody>${shopping.map((row) => `<tr><td>× ${row.quantity}</td><td>${escapeHtml(fixName(row.key))}</td><td class="num">${escapeHtml(yen.format(row.total))}</td></tr>`).join("")}</tbody></table><p><strong>${escapeHtml(yen.format(shoppingTotal))}</strong> ${escapeHtml(t("estimated"))}</p>` : `<p>${escapeHtml(t("noFixes"))}</p>`;
     const depreciation = Object.entries(DEPRECIATION).map(([category, rate]) => `<tr><td>${escapeHtml(categoryText(category))}</td><td>${Math.round(rate * 100)}${escapeHtml(sharedText("perYear"))}</td></tr>`).join("");
     const evidenceRows = rooms.map((room) => `<tr><th scope="row">${escapeHtml(room.name)}</th><td class="fingerprints">${escapeHtml(room.sha256 || sharedText("unavailable"))}</td><td>${escapeHtml(room.captured_at || sharedText("unavailable"))}</td></tr>`).join("");
-    return `<!doctype html><html lang="${state.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(sharedText("reportTitle"))}</title><style>${styles}</style></head><body><button class="print-button" id="print-report" type="button">${escapeHtml(sharedText("printSavePdf"))}</button><main><section class="cover"><div class="brand">Room<b>Ledger</b></div><h1>${escapeHtml(sharedText("reportCoverTitleA"))}<br>${escapeHtml(sharedText("reportCoverTitleB"))}</h1><p class="lead">${escapeHtml(sharedText("reportLead"))}</p><p class="meta">${escapeHtml(sharedText("prepared", { date }))}${state.runId ? ` · ${escapeHtml(sharedText("runLabel", { id: state.runId }))}` : ""}</p><div class="totals"><div><span>${escapeHtml(sharedText("replacement"))}</span><strong>${escapeHtml(money0.format(replacement))}</strong></div><div><span>${escapeHtml(sharedText("actualCashValue"))}</span><strong>${escapeHtml(money0.format(acv))}</strong></div><div><span>${escapeHtml(sharedText("itemsLabel"))}</span><strong>${items.length}</strong></div><div><span>${escapeHtml(sharedText("roomsLabel"))}</span><strong>${rooms.length}</strong></div></div><div class="readiness">${escapeHtml(t("readiness"))}: ${score} / 100<br><small>${escapeHtml(t("readinessSummary"))}</small></div><p class="disclaimer">${disclaimer}</p></section>${inventory}${roomSections}<section class="room-break"><h2>${escapeHtml(t("shopping"))}</h2><p>${escapeHtml(sharedText("shoppingExplanation"))}</p>${fixes}<h2>${escapeHtml(sharedText("appendixTitle"))}</h2><div class="method"><p>${escapeHtml(sharedText("methodImage"))}</p><p>${escapeHtml(sharedText("methodAcv"))}</p><table><thead><tr><th>${escapeHtml(sharedText("reportCategory"))}</th><th>${escapeHtml(sharedText("annualDepreciation"))}</th></tr></thead><tbody>${depreciation}</tbody></table><p>${escapeHtml(sharedText("readinessFormula"))}</p><p>${escapeHtml(sharedText("methodDedupe"))}</p></div><h3>${escapeHtml(sharedText("photoFingerprints"))}</h3><table><thead><tr><th>${escapeHtml(sharedText("roomLabel"))}</th><th>${escapeHtml(sharedText("sanitizedHash"))}</th><th>${escapeHtml(sharedText("utcTimestamp"))}</th></tr></thead><tbody>${evidenceRows}</tbody></table><footer><strong>${disclaimer}</strong><br>${escapeHtml(sharedText("reportGenerated"))}</footer></section></main></body></html>`;
+    return `<!doctype html><html lang="${state.language}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(sharedText("reportTitle"))}</title><style>${styles}</style></head><body><button class="print-button" id="print-report" type="button">${escapeHtml(sharedText("printSavePdf"))}</button><main><section class="cover"><div class="brand">Room<b>Ledger</b></div><h1>${escapeHtml(sharedText("reportCoverTitleA"))}<br>${escapeHtml(sharedText("reportCoverTitleB"))}</h1><p class="lead">${escapeHtml(sharedText("reportLead"))}</p><p class="meta">${escapeHtml(sharedText("prepared", { date }))}${state.runId ? ` · ${escapeHtml(sharedText("runLabel", { id: state.runId }))}` : ""}</p><div class="totals"><div><span>${escapeHtml(sharedText("replacement"))}</span><strong>${escapeHtml(money0.format(replacement))}</strong></div><div><span>${escapeHtml(sharedText("actualCashValue"))}</span><strong>${escapeHtml(money0.format(acv))}</strong></div><div><span>${escapeHtml(sharedText("itemsLabel"))}</span><strong>${items.length}</strong></div><div><span>${escapeHtml(sharedText("roomsLabel"))}</span><strong>${rooms.length}</strong></div></div><div class="readiness">${escapeHtml(t("readiness"))}: ${score} / 100<br><small>${escapeHtml(t("readinessSummary"))}</small></div><p class="meta">${escapeHtml(sharedText("fxNote", { currency: state.currency }))}</p><p class="disclaimer">${disclaimer}</p></section>${inventory}${roomSections}<section class="room-break"><h2>${escapeHtml(t("shopping"))}</h2><p>${escapeHtml(sharedText("shoppingExplanation"))}</p>${fixes}<h2>${escapeHtml(sharedText("appendixTitle"))}</h2><div class="method"><p>${escapeHtml(sharedText("methodImage"))}</p><p>${escapeHtml(sharedText("methodAcv"))}</p><table><thead><tr><th>${escapeHtml(sharedText("reportCategory"))}</th><th>${escapeHtml(sharedText("annualDepreciation"))}</th></tr></thead><tbody>${depreciation}</tbody></table><p>${escapeHtml(sharedText("readinessFormula"))}</p><p>${escapeHtml(sharedText("methodDedupe"))}</p></div><h3>${escapeHtml(sharedText("photoFingerprints"))}</h3><table><thead><tr><th>${escapeHtml(sharedText("roomLabel"))}</th><th>${escapeHtml(sharedText("sanitizedHash"))}</th><th>${escapeHtml(sharedText("utcTimestamp"))}</th></tr></thead><tbody>${evidenceRows}</tbody></table><footer><strong>${disclaimer}</strong><br>${escapeHtml(sharedText("reportGenerated"))}</footer></section></main></body></html>`;
   }
 
   function openReport() {
@@ -1693,16 +1750,19 @@
       startAnalysis(state.files, false);
     });
     $("sample-button").addEventListener("click", runSample);
+    $("currency-toggle").addEventListener("click", () => setCurrency(state.currency === "JPY" ? "USD" : "JPY"));
     $("theme-toggle").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
     setTheme(document.documentElement.dataset.theme);
     setEnvironment({ text: sharedText("checkingWorkspace"), status: "checking" });
     setNosanaStatus(sharedText("nosanaChecking"));
     document.documentElement.lang = state.language;
     document.documentElement.dataset.language = state.language;
+    document.documentElement.dataset.currency = state.currency;
     $("language-label").textContent = state.language === "ja" ? "EN" : "日本語";
     $("language-toggle").setAttribute("aria-label", sharedText(state.language === "ja" ? "switchEnglish" : "switchJapanese"));
     $("quake-panel").lang = state.language;
     translateSharedUI();
+    renderCurrencyUI();
     const drop = $("drop-zone");
     ["dragenter", "dragover"].forEach((type) => drop.addEventListener(type, (event) => {
       event.preventDefault();

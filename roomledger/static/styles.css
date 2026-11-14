@@ -168,7 +168,7 @@ h1, h2, h3, h4 { color: var(--paper); }
 #nosana-status[data-source="live"] { color: var(--safe); }
 #nosana-status[data-source="cache"] { color: var(--gold); }
 #nosana-status[data-source="configured"] { color: var(--paper-soft); }
-.header-actions { display: flex; gap: 8px; }
+.header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .theme-icon { display: none; }
 html[data-theme="light"] .theme-icon-moon, html[data-theme="dark"] .theme-icon-sun { display: block; }
 .button {
@@ -424,6 +424,7 @@ html[data-theme="light"] .theme-icon-moon, html[data-theme="dark"] .theme-icon-s
 .stats-ledger strong { display: block; overflow: hidden; color: var(--paper); font-family: var(--serif); font-size: clamp(25px, 2.3vw, 34px); font-weight: 400; letter-spacing: -.035em; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .stats-ledger .stat-primary strong { color: var(--gold); }
 .stats-ledger small { color: var(--muted-dim); font-size: 10px; }
+.currency-note { margin: -24px 0 24px; color: var(--muted-dim); font-size: 11px; }
 .ledger-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 22px; }
 .ledger-toolbar h2 { margin-bottom: 2px; font-size: 23px; letter-spacing: -.025em; }
 .ledger-toolbar p { margin: 0; color: var(--muted); font-size: 12px; }
@@ -729,7 +730,7 @@ body[data-mode="quake"] .box-target[data-risk="low"] .number-plate { fill: var(-
   body { background-size: 36px 36px; }
   .header-inner { min-height: 64px; padding: 12px 0; }
   .brand { font-size: 22px; }
-  .header-actions { gap: 6px; }
+  .header-actions { flex-basis: 100%; margin-left: 0; justify-content: flex-start; gap: 6px; }
   .header-actions .button { width: 44px; padding: 10px; font-size: 0; gap: 0; }
   .header-actions .button svg { width: 20px; height: 20px; }
   .header-status { font-size: 11px; }

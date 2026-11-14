@@ -95,6 +95,12 @@ def run() -> None:
                 assert page.locator("html").get_attribute("data-theme") == "dark", "Theme preference must survive reload"
                 page.locator("#theme-toggle").click()
                 assert page.locator("html").get_attribute("data-theme") == "light"
+                assert page.locator("html").get_attribute("data-currency") == "USD", "USD must be the independent first-run currency"
+                page.locator("#currency-toggle").click()
+                page.reload(wait_until="networkidle")
+                assert page.locator("html").get_attribute("data-currency") == "JPY", "Currency preference must survive reload independently"
+                assert page.locator("html").get_attribute("lang") == "en", "Currency selection must not select a language"
+                page.locator("#currency-toggle").click()
                 page.locator("#language-toggle").click()
                 assert page.locator("html").get_attribute("lang") == "ja"
                 assert "サンプルホーム" in page.locator("#sample-button").inner_text(), "Shared controls must translate before upload"
@@ -115,6 +121,20 @@ def run() -> None:
                 assert "local" in page.locator("#run-toast").inner_text().lower(), "Offline summary must identify local execution"
                 page.screenshot(path=str(ARTIFACTS / "02-inventory-desktop.png"), full_page=True)
 
+                page.locator("#currency-toggle").click()
+                assert page.locator("html").get_attribute("data-currency") == "JPY"
+                assert "1,900,500" in page.locator("#total-value").inner_text(), "USD totals must convert at the disclosed rate"
+                page.locator("#language-toggle").click()
+                assert page.locator("html").get_attribute("lang") == "ja"
+                assert page.locator("html").get_attribute("data-currency") == "JPY", "Language change must not change currency"
+                page.locator("#currency-toggle").click()
+                assert page.locator("html").get_attribute("data-currency") == "USD"
+                assert page.locator("html").get_attribute("lang") == "ja", "Currency change must not change language"
+                page.locator("#language-toggle").click()
+                page.locator("#currency-toggle").click()
+                assert page.locator("html").get_attribute("data-currency") == "JPY"
+                assert page.locator("html").get_attribute("lang") == "en"
+
                 page.locator("#room-list").get_by_text("Living Room West", exact=False).first.click()
                 television = page.locator("#item-legend").get_by_text("65-inch television", exact=False).first
                 television.click()
@@ -126,7 +146,9 @@ def run() -> None:
                 original_label = label.input_value()
                 label.fill(original_label + " — receipt checked")
                 price = form.locator('input[name="price"], input[name="replacement_usd"], input[type="number"], #edit-price').first
-                price.fill("950")
+                assert price.input_value() == "135000", "Editor must display the converted JPY amount without changing language"
+                assert "JPY" in page.locator('label[for="edit-price"]').inner_text(), "Editor must identify its active currency"
+                price.fill("142500")
                 page.locator("#edit-condition").select_option("fair")
                 checkbox = form.locator('input[type="checkbox"]').first
                 checkbox.check()
@@ -134,6 +156,8 @@ def run() -> None:
                 page.wait_for_timeout(300)
                 assert "receipt checked" in page.locator("#item-legend").inner_text(), "Edited item must stay in current inventory"
                 assert "fair" in page.locator("#inspector").inner_text().lower(), "Condition edit must update evidence"
+                assert "142,500" in page.locator("#inspector").inner_text(), "JPY editor value must convert back to the USD inventory exactly once"
+                assert "150 JPY" in page.locator("#currency-note").inner_text(), "Visible conversion-rate note required"
 
                 page.locator("#mode-quake").click()
                 page.locator("#readiness-score").wait_for(state="visible")
@@ -173,6 +197,7 @@ def run() -> None:
                 download.save_as(csv_path)
                 csv_text = csv_path.read_text(encoding="utf-8-sig")
                 assert "receipt checked" in csv_text and "fingerprint" in csv_text.lower(), "CSV must include current edits and evidence"
+                assert "currency" in csv_text and "fx_jpy_per_usd" in csv_text and "142500" in csv_text, "CSV must include explicit JPY values and rate metadata"
 
                 with page.expect_popup() as popup_info:
                     page.locator("#report-button").click()
@@ -183,6 +208,7 @@ def run() -> None:
                 assert "receipt checked" in report_text and "写真の証拠フィンガープリント" in report_text and "UTC処理タイムスタンプ" in report_text
                 assert "家財一覧" in report_text and "付録: 算出方法と証拠" in report_text and "ブラウザで編集した現在の台帳" in report_text
                 assert "Consolidated inventory" not in report_text and "Annual depreciation" not in report_text, "Report chrome must translate completely"
+                assert "1 USD ≈ 150 JPY" in report_text and "JPY" in report_text, "Report must identify display currency and conversion rate"
                 assert report.locator("html").get_attribute("lang") == "ja"
                 assert report.locator("img").count() >= 7, "Report needs room photographs and item crops"
                 assert report.evaluate("getComputedStyle(document.documentElement).backgroundColor") == "rgb(255, 255, 255)", "Reports must remain light when opened from dark mode"
@@ -208,6 +234,7 @@ def run() -> None:
                 mobile = mobile_browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=1)
                 mobile.goto(BASE, wait_until="networkidle")
                 assert mobile.locator("html").get_attribute("data-theme") == "light", "A fresh mobile browser must default to light"
+                assert mobile.locator("html").get_attribute("data-currency") == "USD", "A fresh mobile browser has an independent USD default"
                 mobile.locator("#sample-button").click()
                 mobile.locator("#run-toast").filter(has_text="6 rooms").wait_for(state="visible", timeout=90000)
                 mobile.locator("#language-toggle").click()

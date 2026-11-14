@@ -38,7 +38,7 @@ def main() -> None:
     require("<script src=\"http" not in html and "<link href=\"http" not in html and "@import" not in css, "Frontend must not use remote assets")
     for key in ("reportGenerated", "readinessFormula", "deleteNamed", "summaryLocal", "localizedMessage"):
         require(key in js, f"Complete localization path missing: {key}")
-    for element in ("sample-button", "mode-quake", "language-toggle", "readiness-score", "report-button", "csv-button", "theme-toggle"):
+    for element in ("sample-button", "mode-quake", "language-toggle", "currency-toggle", "readiness-score", "report-button", "csv-button", "theme-toggle"):
         require(element in js or element in (ROOT / "roomledger/static/index.html").read_text(), f"Missing UI control {element}")
     require((ROOT / "scripts/browser_check.py").is_file(), "Browser acceptance script missing")
     print(f"ROOMLEDGER_PROJECT_OK: 6 unique samples, {len(cache)} cached responses, honest docs, complete local frontend")
