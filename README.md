@@ -14,7 +14,7 @@ python3 -m venv .venv
 .venv/bin/uvicorn roomledger.app:app --host 127.0.0.1 --port 8000
 ```
 
-Open **http://127.0.0.1:8000** and choose **Try with sample home**. Six original illustrated room photographs exercise the entire workflow with no third-party network access. The bundled results are pre-cached deterministic fixtures, not claimed live AI detections. Replace the illustrations with licensed sample photographs by editing `scripts/generate_samples.py` and regenerating their cache.
+Open **http://127.0.0.1:8000** and choose **Try with sample home**. The app defaults to the report-inspired warm-white, ink, and brown theme; the header's **Dark mode** toggle restores the dark workbench and saves the preference in this browser (`roomledger-theme` in local storage). Reports always stay light for printing. Six original illustrated room photographs exercise the entire workflow with no third-party network access. The bundled results are pre-cached deterministic fixtures, not claimed live AI detections. Replace the illustrations with licensed sample photographs by editing `scripts/generate_samples.py` and regenerating their cache.
 
 Upload 1–8 JPEG, PNG, or WebP files (12 MB each) for your own offline/local run. Click any numbered box or inventory row to edit label, condition, replacement price, receipt status, or deletion. **Quake-Ready** changes the same evidence into prioritized tip-over fixes and supports English / 日本語. **Report** opens print-ready HTML; **CSV** downloads the current edited inventory.
 

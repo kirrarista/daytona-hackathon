@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,34 @@ def wait_for_server() -> None:
         except Exception:
             time.sleep(0.1)
     raise RuntimeError("Uvicorn did not become healthy")
+
+
+def measured_contrasts(page) -> dict[str, float | str]:
+    colors = page.evaluate("""() => {
+      const body = getComputedStyle(document.body);
+      return {
+        theme: document.documentElement.dataset.theme,
+        background: body.backgroundColor,
+        text: getComputedStyle(document.querySelector('.hero-copy h1')).color,
+        secondary: getComputedStyle(document.querySelector('.hero-summary')).color,
+        accent: getComputedStyle(document.querySelector('.hero-copy .section-marker')).color,
+      };
+    }""")
+
+    def luminance(css_color: str) -> float:
+        channels = [float(value) / 255 for value in re.findall(r"[\d.]+", css_color)[:3]]
+        linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in channels]
+        return sum(value * weight for value, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+
+    def ratio(foreground: str) -> float:
+        high, low = sorted((luminance(foreground), luminance(colors["background"])), reverse=True)
+        return (high + 0.05) / (low + 0.05)
+
+    result = {"theme": colors["theme"], "body_text": ratio(colors["text"]),
+              "secondary_text": ratio(colors["secondary"]), "accent_text": ratio(colors["accent"])}
+    for role in ("body_text", "secondary_text", "accent_text"):
+        assert result[role] >= 4.5, f"{result['theme']} {role} contrast is only {result[role]:.2f}:1"
+    return result
 
 
 def run() -> None:
@@ -55,7 +84,17 @@ def run() -> None:
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.on("request", lambda request: external.append(request.url) if request.url.startswith(("http://", "https://")) and not request.url.startswith(BASE) else None)
                 page.goto(BASE, wait_until="networkidle")
+                assert page.locator("html").get_attribute("data-theme") == "light", "Light must be the first-run default"
+                light_contrast = measured_contrasts(page)
                 page.screenshot(path=str(ARTIFACTS / "01-welcome.png"), full_page=True)
+                page.locator("#theme-toggle").click()
+                assert page.locator("html").get_attribute("data-theme") == "dark"
+                dark_contrast = measured_contrasts(page)
+                page.screenshot(path=str(ARTIFACTS / "01b-welcome-dark.png"), full_page=True)
+                page.reload(wait_until="networkidle")
+                assert page.locator("html").get_attribute("data-theme") == "dark", "Theme preference must survive reload"
+                page.locator("#theme-toggle").click()
+                assert page.locator("html").get_attribute("data-theme") == "light"
                 page.locator("#sample-button").click()
                 page.locator("#run-toast").filter(has_text="6 rooms").wait_for(state="visible", timeout=90000)
                 page.wait_for_timeout(1200)
@@ -98,6 +137,9 @@ def run() -> None:
                 page.evaluate("document.activeElement?.blur?.(); document.querySelector('.skip-link').hidden = true")
                 page.screenshot(path=str(ARTIFACTS / "03-quake-japanese.png"), full_page=True)
                 page.locator("#language-toggle").click()
+                page.locator("#theme-toggle").click()
+                assert page.locator("html").get_attribute("data-theme") == "dark", "Dark workbench must be available after a run"
+                page.screenshot(path=str(ARTIFACTS / "03b-inventory-dark.png"), full_page=True)
 
                 with page.expect_download() as download_info:
                     page.locator("#csv-button").click()
@@ -116,6 +158,7 @@ def run() -> None:
                 assert "AI estimates — verify with receipts. Not an insurance appraisal." in report_text
                 assert "receipt checked" in report_text and "Photo evidence fingerprint" in report_text and "UTC processing timestamp" in report_text
                 assert report.locator("img").count() >= 7, "Report needs room photographs and item crops"
+                assert report.evaluate("getComputedStyle(document.documentElement).backgroundColor") == "rgb(255, 255, 255)", "Reports must remain light when opened from dark mode"
                 report.screenshot(path=str(ARTIFACTS / "04-report.png"), full_page=True)
                 report.close()
                 page.locator("#room-list").get_by_text("Entry Bedroom", exact=False).first.click()
@@ -137,6 +180,7 @@ def run() -> None:
                 mobile_browser = playwright.chromium.launch(**launch)
                 mobile = mobile_browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=1)
                 mobile.goto(BASE, wait_until="networkidle")
+                assert mobile.locator("html").get_attribute("data-theme") == "light", "A fresh mobile browser must default to light"
                 mobile.locator("#sample-button").click()
                 mobile.locator("#run-toast").filter(has_text="6 rooms").wait_for(state="visible", timeout=90000)
                 mobile.wait_for_timeout(500)
@@ -156,9 +200,10 @@ def run() -> None:
     recording = ARTIFACTS / "roomledger-demo.webm"
     assert recording.is_file() and recording.stat().st_size > 10000, "Full demo recording missing"
     summary = {"rooms": 6, "items": 24, "external_requests": 0, "mobile_width": 390,
-               "screenshots": 5, "recording": str(recording.relative_to(ROOT))}
+               "screenshots": 7, "contrast": {"light": light_contrast, "dark": dark_contrast},
+               "recording": str(recording.relative_to(ROOT))}
     (ARTIFACTS / "browser-summary.json").write_text(json.dumps(summary, indent=2))
-    print("ROOMLEDGER_BROWSER_OK: six-room offline demo, edits, quake/Japanese, report, CSV, mobile, and recording")
+    print("ROOMLEDGER_BROWSER_OK: six-room demo, light/dark themes with contrast and persistence, edits, quake/Japanese, light report, CSV, mobile, recording")
 
 
 if __name__ == "__main__":

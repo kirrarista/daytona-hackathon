@@ -1,9 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0d1420">
+  <meta name="theme-color" content="#f5f2eb">
+  <script>
+    try {
+      if (localStorage.getItem("roomledger-theme") === "dark") document.documentElement.dataset.theme = "dark";
+    } catch (_) { /* Storage can be unavailable in private contexts; light remains the default. */ }
+  </script>
   <meta name="description" content="RoomLedger turns room photos into an editable disaster inventory with evidence crops, replacement values, and earthquake safety actions.">
   <title>RoomLedger — Home inventory & quake readiness</title>
   <link rel="stylesheet" href="/static/styles.css">
@@ -20,6 +25,11 @@
         <span id="nosana-status" class="provider-pill" data-source="waiting">Nosana: checking</span>
       </div>
       <nav class="header-actions" aria-label="Inventory actions">
+        <button class="button button-quiet" id="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Change color theme; reports stay light for printing">
+          <svg class="theme-icon theme-icon-moon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z"/></svg>
+          <svg class="theme-icon theme-icon-sun" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
+          <span id="theme-label">Dark mode</span>
+        </button>
         <button class="button button-quiet" id="csv-button" type="button" disabled>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4"/></svg>
           Export CSV

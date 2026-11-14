@@ -6,7 +6,7 @@
 - `roomledger/workers.py`: shared async GPU semaphore and room-local `LocalWorker` / `SandboxWorker` pipelines. Host-side network inference is used only so concurrency stays global across otherwise independent Daytona sandboxes.
 - `roomledger/engine.py`: the only image decoder/cropper. It runs on the host only in visibly labelled local/demo mode, and inside Daytona in live mode. It also owns valuation, ACV, dedupe, readiness, and shopping calculations.
 - `roomledger/nosana.py`: OpenAI-compatible Nosana vision transport, defensive JSON/box parsing, deterministic offline fixture generation, and result-only disk cache.
-- `roomledger/static/`: local vanilla HTML/CSS/JS; no CDN, framework, bundler, or external font dependency.
+- `roomledger/static/`: local vanilla HTML/CSS/JS; no CDN, framework, bundler, or external font dependency. Theme-scoped tokens default to the printable report's light paper/ink/brown palette; `html[data-theme="dark"]` restores the dark workbench. The header toggle persists `roomledger-theme` in browser local storage, suppresses transitions during swaps, and never changes the always-light printable report.
 - `cache/sample-*.json`: original illustrated sample-home responses with explicit origin/model provenance. Live cache keys include a normalized-endpoint hash; mock and live origins are never silently interchangeable. Never commit user-upload cache entries, images, credentials, raw endpoint URLs, or base64 logs.
 
 ## Verification

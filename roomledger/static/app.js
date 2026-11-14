@@ -169,6 +169,22 @@
     $("reset-button").hidden = busy || !state.done;
   }
 
+  function setTheme(theme) {
+    const selected = theme === "dark" ? "dark" : "light";
+    const root = document.documentElement;
+    root.classList.add("theme-switching");
+    root.dataset.theme = selected;
+    try { localStorage.setItem("roomledger-theme", selected); } catch (_) { /* Theme still works without storage. */ }
+    const dark = selected === "dark";
+    $("theme-toggle").setAttribute("aria-pressed", String(dark));
+    $("theme-toggle").setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+    $("theme-label").textContent = dark ? "Light mode" : "Dark mode";
+    document.querySelector('meta[name="theme-color"]').content = dark ? "#0d1420" : "#f5f2eb";
+    // Flush once, then restore transitions on the following frame (not a color smear).
+    void document.body.offsetWidth;
+    requestAnimationFrame(() => root.classList.remove("theme-switching"));
+  }
+
   function updateExportAvailability() {
     const available = allRooms().length > 0;
     $("csv-button").disabled = !available;
@@ -1245,6 +1261,8 @@
       startAnalysis(state.files, false);
     });
     $("sample-button").addEventListener("click", runSample);
+    $("theme-toggle").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+    setTheme(document.documentElement.dataset.theme);
     const drop = $("drop-zone");
     ["dragenter", "dragover"].forEach((type) => drop.addEventListener(type, (event) => {
       event.preventDefault();

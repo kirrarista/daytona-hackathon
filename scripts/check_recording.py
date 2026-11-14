@@ -15,10 +15,11 @@ def main() -> None:
     summary = json.loads(summary_path.read_text())
     assert summary["rooms"] == 6 and summary["items"] == 24
     assert summary["external_requests"] == 0 and summary["mobile_width"] == 390
-    for name in ("01-welcome.png", "02-inventory-desktop.png", "03-quake-japanese.png", "04-report.png", "05-inventory-mobile.png"):
+    assert summary["screenshots"] == 7 and summary["contrast"]["light"]["body_text"] >= 4.5 and summary["contrast"]["dark"]["body_text"] >= 4.5
+    for name in ("01-welcome.png", "01b-welcome-dark.png", "02-inventory-desktop.png", "03-quake-japanese.png", "03b-inventory-dark.png", "04-report.png", "05-inventory-mobile.png"):
         path = ARTIFACTS / name
         assert path.is_file() and path.stat().st_size > 5000, f"Missing or empty screenshot: {name}"
-    print(f"ROOMLEDGER_RECORDING_OK: {recording.stat().st_size:,} byte offline demo plus five reviewed screenshots")
+    print(f"ROOMLEDGER_RECORDING_OK: {recording.stat().st_size:,} byte offline demo plus seven reviewed screenshots")
 
 
 if __name__ == "__main__":
