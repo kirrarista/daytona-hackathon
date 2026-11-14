@@ -31,7 +31,7 @@ The initial build environment contained **no sponsor credentials or real room ph
 
 ## Configure live providers
 
-Copy `config.example` to a local dotenv file, then provide:
+Copy `.env.example` to a local dotenv file, then provide:
 
 ```sh
 DAYTONA_API_KEY=...
