@@ -7,7 +7,11 @@
   <script>
     try {
       if (localStorage.getItem("roomledger-theme") === "dark") document.documentElement.dataset.theme = "dark";
-    } catch (_) { /* Storage can be unavailable in private contexts; light remains the default. */ }
+      if (localStorage.getItem("roomledger-language") === "ja") {
+        document.documentElement.dataset.language = "ja";
+        document.documentElement.lang = "ja";
+      }
+    } catch (_) { /* Storage can be unavailable in private contexts; safe defaults remain. */ }
   </script>
   <meta name="description" content="RoomLedger turns room photos into an editable disaster inventory with evidence crops, replacement values, and earthquake safety actions.">
   <title>RoomLedger — Home inventory & quake readiness</title>
@@ -24,7 +28,11 @@
         <span id="environment-status" class="provider-pill"><span class="status-light is-checking" aria-hidden="true"></span><span>Checking workspace…</span></span>
         <span id="nosana-status" class="provider-pill" data-source="waiting">Nosana: checking</span>
       </div>
-      <nav class="header-actions" aria-label="Inventory actions">
+      <nav class="header-actions" aria-label="Application settings and inventory actions">
+        <button class="button button-quiet language-toggle" id="language-toggle" type="button" aria-label="Switch interface to Japanese" title="Change interface language">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>
+          <span id="language-label">日本語</span>
+        </button>
         <button class="button button-quiet" id="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark mode" title="Change color theme; reports stay light for printing">
           <svg class="theme-icon theme-icon-moon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 15.2A8.5 8.5 0 0 1 8.8 4 8.5 8.5 0 1 0 20 15.2Z"/></svg>
           <svg class="theme-icon theme-icon-sun" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4"/><circle cx="12" cy="12" r="4"/></svg>
@@ -32,11 +40,11 @@
         </button>
         <button class="button button-quiet" id="csv-button" type="button" disabled>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4"/></svg>
-          Export CSV
+          <span data-ui-text="exportCsv">Export CSV</span>
         </button>
         <button class="button button-quiet" id="report-button" type="button" disabled>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7zM15 3v5h4M10 12h6m-6 4h6M5 7H3v14h12v-2"/></svg>
-          Print report
+          <span data-ui-text="printReport">Print report</span>
         </button>
       </nav>
     </div>
@@ -46,8 +54,8 @@
     <section class="intake initial-reveal" id="intake" aria-labelledby="hero-title">
       <div class="hero-copy">
         <div class="section-marker"><span aria-hidden="true">⌖</span> Disaster inventory, made tangible</div>
-        <h1 id="hero-title">Know what you own.<br>Secure what matters.</h1>
-        <p class="hero-summary">Turn room photos into an evidence-backed home ledger for insurance recovery and a practical plan for the next earthquake.</p>
+        <h1 id="hero-title"><span data-ui-text="heroTitleA">Know what you own.</span><br><span data-ui-text="heroTitleB">Secure what matters.</span></h1>
+        <p class="hero-summary" data-ui-text="heroSummary">Turn room photos into an evidence-backed home ledger for insurance recovery and a practical plan for the next earthquake.</p>
         <ul class="hero-points" aria-label="What RoomLedger produces">
           <li><span class="point-icon" aria-hidden="true">01</span><span><strong>Every visible item, mapped.</strong> Numbered boxes, evidence crops, replacement cost and actual cash value.</span></li>
           <li><span class="point-icon" aria-hidden="true">02</span><span><strong>Falling hazards, prioritized.</strong> A room-aware quake score and a priced anchoring shopping list.</span></li>
@@ -57,8 +65,8 @@
       <div class="intake-panel">
         <div class="intake-heading">
           <div>
-            <h2>Start with your rooms</h2>
-            <p>JPEG, PNG or WebP · up to 8 photos · 12 MB each</p>
+            <h2 data-ui-text="startRooms">Start with your rooms</h2>
+            <p data-ui-text="fileRules">JPEG, PNG or WebP · up to 8 photos · 12 MB each</p>
           </div>
           <svg class="scan-icon" aria-hidden="true" viewBox="0 0 40 40"><path d="M4 14V4h10M26 4h10v10M36 26v10H26M14 36H4V26"/><path d="M12 20h16M20 12v16"/></svg>
         </div>
@@ -70,24 +78,24 @@
               <span class="drop-symbol" aria-hidden="true">
                 <svg viewBox="0 0 32 32"><path d="M16 22V6m0 0-6 6m6-6 6 6M5 20v7h22v-7"/></svg>
               </span>
-              <strong>Drop room photos here</strong>
-              <span>or <u>choose from your device</u></span>
+              <strong data-ui-text="dropTitle">Drop room photos here</strong>
+              <span><span data-ui-text="or">or</span> <u data-ui-text="chooseDevice">choose from your device</u></span>
             </label>
           </div>
           <div id="selected-files" class="selected-files" hidden>
             <div id="selected-file-list" class="selected-file-list"></div>
             <div class="selected-actions">
-              <button class="text-button" id="clear-files" type="button">Clear selection</button>
-              <button class="button button-gold" id="analyze-button" type="submit">Analyze selected rooms</button>
+              <button class="text-button" id="clear-files" type="button" data-ui-text="clearSelection">Clear selection</button>
+              <button class="button button-gold" id="analyze-button" type="submit" data-ui-text="analyzeRooms">Analyze selected rooms</button>
             </div>
           </div>
           <p class="form-error" id="upload-error" role="alert" hidden></p>
         </form>
 
-        <div class="sample-divider"><span>No photos handy?</span></div>
+        <div class="sample-divider"><span data-ui-text="noPhotos">No photos handy?</span></div>
         <button class="sample-button" id="sample-button" type="button">
           <span class="sample-grid" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
-          <span><strong>Try with sample home</strong><small>6 rooms · cached offline demo</small></span>
+          <span><strong data-ui-text="sampleHome">Try with sample home</strong><small data-ui-text="sampleDetails">6 rooms · cached offline demo</small></span>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
         </button>
         <p class="privacy-note"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M5 9V6a5 5 0 0 1 10 0v3M3 9h14v9H3z"/></svg>Fresh JPEGs are created without GPS or photo metadata. Original uploaded files are not retained.</p>
@@ -127,10 +135,10 @@
 
       <section id="inventory" class="inventory" aria-labelledby="inventory-title" hidden>
         <div class="stats-ledger" aria-label="Current edited inventory totals">
-          <div class="stat-primary"><span>Replacement total</span><strong id="total-value">$0</strong><small>Current edited inventory</small></div>
-          <div><span>Actual cash value</span><strong id="acv-value">$0</strong><small>Age & condition adjusted</small></div>
-          <div><span>Items</span><strong id="item-count">0</strong><small>Across all included rooms</small></div>
-          <div><span>Rooms</span><strong id="room-count">0</strong><small>With usable evidence</small></div>
+          <div class="stat-primary"><span data-ui-text="replacementTotal">Replacement total</span><strong id="total-value">$0</strong><small data-ui-text="currentEdited">Current edited inventory</small></div>
+          <div><span data-ui-text="actualCashValue">Actual cash value</span><strong id="acv-value">$0</strong><small data-ui-text="ageAdjusted">Age & condition adjusted</small></div>
+          <div><span data-ui-text="itemsLabel">Items</span><strong id="item-count">0</strong><small data-ui-text="acrossRooms">Across all included rooms</small></div>
+          <div><span data-ui-text="roomsLabel">Rooms</span><strong id="room-count">0</strong><small data-ui-text="usableEvidence">With usable evidence</small></div>
         </div>
 
         <div class="ledger-toolbar">
@@ -142,14 +150,13 @@
             <div class="segmented-control" role="group" aria-label="Inventory view">
               <button id="mode-insurance" type="button" aria-pressed="true">
                 <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M3 9 10 3l7 6M5 8v9h10V8M8 17v-5h4v5"/></svg>
-                Insurance
+                <span data-ui-text="insurance">Insurance</span>
               </button>
               <button id="mode-quake" type="button" aria-pressed="false">
                 <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m2 12 3-5 3 7 3-11 3 13 2-6 2 2"/></svg>
-                Quake-Ready
+                <span data-ui-text="quakeReady">Quake-Ready</span>
               </button>
             </div>
-            <button class="language-toggle" id="language-toggle" type="button" aria-label="Switch quake interface to Japanese" hidden>日本語</button>
           </div>
         </div>
 
@@ -196,8 +203,8 @@
           <aside id="inspector" class="inspector" aria-label="Item evidence inspector" aria-live="polite">
             <div class="inspector-empty">
               <svg aria-hidden="true" viewBox="0 0 48 48"><path d="M7 17V7h10M31 7h10v10M41 31v10H31M17 41H7V31"/><path d="M17 25h14M24 18v14"/></svg>
-              <h3>Inspect the evidence</h3>
-              <p>Choose a numbered box or item. You can verify the crop, correct details, and keep totals current.</p>
+              <h3 data-ui-text="inspectEvidence">Inspect the evidence</h3>
+              <p data-ui-text="inspectHint">Choose a numbered box or item. You can verify the crop, correct details, and keep totals current.</p>
             </div>
           </aside>
         </div>
@@ -206,8 +213,8 @@
           <div class="logs-heading">
             <div><h3 id="logs-title">Run log</h3><p>Processing metadata only — never photo bytes.</p></div>
             <div class="log-tabs" role="tablist" aria-label="Log detail">
-              <button id="plain-log-tab" role="tab" type="button" aria-selected="true" aria-controls="plain-log">Plain language</button>
-              <button id="technical-log-tab" role="tab" type="button" aria-selected="false" aria-controls="technical-log" tabindex="-1">Technical</button>
+              <button id="plain-log-tab" role="tab" type="button" aria-selected="true" aria-controls="plain-log"><span data-ui-text="plainLanguage">Plain language</span></button>
+              <button id="technical-log-tab" role="tab" type="button" aria-selected="false" aria-controls="technical-log" tabindex="-1"><span data-ui-text="technical">Technical</span></button>
             </div>
           </div>
           <div id="plain-log" class="log-pane" role="tabpanel" aria-labelledby="plain-log-tab" tabindex="0"></div>

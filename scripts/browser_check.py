@@ -95,6 +95,14 @@ def run() -> None:
                 assert page.locator("html").get_attribute("data-theme") == "dark", "Theme preference must survive reload"
                 page.locator("#theme-toggle").click()
                 assert page.locator("html").get_attribute("data-theme") == "light"
+                page.locator("#language-toggle").click()
+                assert page.locator("html").get_attribute("lang") == "ja"
+                assert "サンプルホーム" in page.locator("#sample-button").inner_text(), "Shared controls must translate before upload"
+                page.reload(wait_until="networkidle")
+                assert page.locator("html").get_attribute("lang") == "ja", "Language preference must survive reload"
+                assert page.locator(".header-actions #language-toggle").is_visible(), "Language control must stay in the universal header"
+                page.locator("#language-toggle").click()
+                assert page.locator("html").get_attribute("lang") == "en"
                 page.locator("#sample-button").click()
                 page.locator("#run-toast").filter(has_text="6 rooms").wait_for(state="visible", timeout=90000)
                 page.wait_for_timeout(1200)

@@ -18,6 +18,41 @@
     glass_film: { en: "Shatter-protection glass film", ja: "飛散防止フィルム", unit: 1600 },
     fridge_belts: { en: "Refrigerator belts", ja: "冷蔵庫転倒防止ベルト", unit: 2200 },
   };
+  const UI_TEXT = {
+    exportCsv: { en: "Export CSV", ja: "CSV出力" },
+    printReport: { en: "Print report", ja: "レポート印刷" },
+    themeDark: { en: "Dark mode", ja: "ダークモード" },
+    themeLight: { en: "Light mode", ja: "ライトモード" },
+    heroTitleA: { en: "Know what you own.", ja: "持ち物を、記録する。" },
+    heroTitleB: { en: "Secure what matters.", ja: "大切なものを、守る。" },
+    heroSummary: { en: "Turn room photos into an evidence-backed home ledger for insurance recovery and a practical plan for the next earthquake.", ja: "部屋の写真から、保険請求に使える家財の証拠リストと、地震に備える実践的な対策を作成します。" },
+    startRooms: { en: "Start with your rooms", ja: "部屋の写真から始める" },
+    fileRules: { en: "JPEG, PNG or WebP · up to 8 photos · 12 MB each", ja: "JPEG、PNG、WebP · 写真は8枚まで · 各12MB" },
+    dropTitle: { en: "Drop room photos here", ja: "ここに部屋の写真をドロップ" },
+    or: { en: "or", ja: "または" },
+    chooseDevice: { en: "choose from your device", ja: "デバイスから選択" },
+    clearSelection: { en: "Clear selection", ja: "選択をクリア" },
+    analyzeRooms: { en: "Analyze selected rooms", ja: "選択した部屋を分析" },
+    noPhotos: { en: "No photos handy?", ja: "写真がない場合は？" },
+    sampleHome: { en: "Try with sample home", ja: "サンプルホームを試す" },
+    sampleDetails: { en: "6 rooms · cached offline demo", ja: "6部屋 · キャッシュ済みオフライン" },
+    replacementTotal: { en: "Replacement total", ja: "再調達価額の合計" },
+    actualCashValue: { en: "Actual cash value", ja: "実際現金価額（ACV）" },
+    currentEdited: { en: "Current edited inventory", ja: "編集後の現在の家財台帳" },
+    ageAdjusted: { en: "Age & condition adjusted", ja: "年数・状態を考慮" },
+    itemsLabel: { en: "Items", ja: "項目数" },
+    acrossRooms: { en: "Across all included rooms", ja: "対象の全部屋" },
+    roomsLabel: { en: "Rooms", ja: "部屋数" },
+    usableEvidence: { en: "With usable evidence", ja: "有効な証拠写真あり" },
+    insurance: { en: "Insurance", ja: "保険" },
+    quakeReady: { en: "Quake-Ready", ja: "地震対策" },
+    inspectEvidence: { en: "Inspect the evidence", ja: "証拠を確認" },
+    inspectHint: { en: "Choose a numbered box or item. You can verify the crop, correct details, and keep totals current.", ja: "番号の枠または項目を選択。切り抜き画像の確認や修正、合計の更新ができます。" },
+    plainLanguage: { en: "Plain language", ja: "わかりやすい表示" },
+    technical: { en: "Technical", ja: "技術ログ" },
+    yourEvidenceLedger: { en: "Your evidence ledger", ja: "家財の証拠台帳" },
+  };
+
   const JA = {
     readiness: "地震対策スコア",
     readinessSummary: "家具などの倒れやすさを数えた相対スコアです。建物の構造安全性を示すものではありません。",
@@ -55,7 +90,7 @@
     selectedRoom: null,
     selectedItem: null,
     mode: "insurance",
-    language: "en",
+    language: document.documentElement.dataset.language === "ja" ? "ja" : "en",
     summary: null,
     done: false,
     failures: 0,
@@ -137,18 +172,27 @@
     }[key] || key);
   }
 
+  function sharedText(key) {
+    return UI_TEXT[key]?.[state.language] || UI_TEXT[key]?.en || key;
+  }
+
+  function translateSharedUI() {
+    document.querySelectorAll("[data-ui-text]").forEach((node) => { node.textContent = sharedText(node.dataset.uiText); });
+    $("theme-label").textContent = sharedText(document.documentElement.dataset.theme === "dark" ? "themeLight" : "themeDark");
+  }
+
   function riskLabel(risk) {
     return t(Object.hasOwn(JA, risk) ? risk : "low");
   }
 
   function roomTypeLabel(room) {
     const type = room.room_type.replaceAll("_", " ");
-    if (state.mode !== "quake" || state.language !== "ja") return type;
+    if (state.language !== "ja") return type;
     return ({ bedroom: "寝室", living_room: "居間", kitchen: "台所", office: "書斎", other: "その他" })[room.room_type] || type;
   }
 
   function localizedItemCount(count) {
-    return state.mode === "quake" && state.language === "ja" ? JA.items.replace("{count}", count) : `${count} items`;
+    return state.language === "ja" ? JA.items.replace("{count}", count) : `${count} items`;
   }
 
   function fixName(key) {
@@ -178,7 +222,7 @@
     const dark = selected === "dark";
     $("theme-toggle").setAttribute("aria-pressed", String(dark));
     $("theme-toggle").setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
-    $("theme-label").textContent = dark ? "Light mode" : "Dark mode";
+    $("theme-label").textContent = sharedText(dark ? "themeLight" : "themeDark");
     document.querySelector('meta[name="theme-color"]').content = dark ? "#0d1420" : "#f5f2eb";
     // Flush once, then restore transitions on the following frame (not a color smear).
     void document.body.offsetWidth;
@@ -574,7 +618,7 @@
     if (state.done) return;
     state.done = true;
     setBusy(false);
-    $("run-title").textContent = allRooms().length ? "Your evidence ledger" : "Run finished";
+    $("run-title").textContent = allRooms().length ? sharedText("yourEvidenceLedger") : "Run finished";
     $("run-progress-bar").style.width = "100%";
     $("queue-text").textContent = "0 active · 0 waiting";
     $("queue-active-bar").style.width = "0%";
@@ -925,7 +969,7 @@
       const empty = el("div", "inspector-empty");
       const icon = svgEl("svg", { viewBox: "0 0 48 48", "aria-hidden": "true" });
       icon.append(svgEl("path", { d: "M7 17V7h10M31 7h10v10M41 31v10H31M17 41H7V31M17 25h14M24 18v14", fill: "none", stroke: "currentColor" }));
-      empty.append(icon, el("h3", "", "Inspect the evidence"), el("p", "", "Choose a numbered box or item. You can verify the crop, correct details, and keep totals current."));
+      empty.append(icon, el("h3", "", sharedText("inspectEvidence")), el("p", "", sharedText("inspectHint")));
       inspector.append(empty);
       return;
     }
@@ -1038,7 +1082,6 @@
     document.body.dataset.mode = mode;
     $("mode-insurance").setAttribute("aria-pressed", String(mode === "insurance"));
     $("mode-quake").setAttribute("aria-pressed", String(mode === "quake"));
-    $("language-toggle").hidden = mode !== "quake";
     $("quake-panel").hidden = mode !== "quake";
     $("quake-panel").lang = mode === "quake" ? state.language : "en";
     if (activeRoom()) {
@@ -1051,9 +1094,13 @@
 
   function toggleLanguage() {
     state.language = state.language === "en" ? "ja" : "en";
-    $("language-toggle").textContent = state.language === "ja" ? "EN" : "日本語";
-    $("language-toggle").setAttribute("aria-label", state.language === "ja" ? "Switch quake interface to English" : "Switch quake interface to Japanese");
+    document.documentElement.lang = state.language;
+    document.documentElement.dataset.language = state.language;
+    try { localStorage.setItem("roomledger-language", state.language); } catch (_) { /* Language still works without storage. */ }
+    $("language-label").textContent = state.language === "ja" ? "EN" : "日本語";
+    $("language-toggle").setAttribute("aria-label", state.language === "ja" ? "Switch interface to English" : "Switch interface to Japanese");
     $("quake-panel").lang = state.language;
+    translateSharedUI();
     if (activeRoom()) {
       renderRoomList();
       renderActiveRoom();
@@ -1263,6 +1310,12 @@
     $("sample-button").addEventListener("click", runSample);
     $("theme-toggle").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
     setTheme(document.documentElement.dataset.theme);
+    document.documentElement.lang = state.language;
+    document.documentElement.dataset.language = state.language;
+    $("language-label").textContent = state.language === "ja" ? "EN" : "日本語";
+    $("language-toggle").setAttribute("aria-label", state.language === "ja" ? "Switch interface to English" : "Switch interface to Japanese");
+    $("quake-panel").lang = state.language;
+    translateSharedUI();
     const drop = $("drop-zone");
     ["dragenter", "dragover"].forEach((type) => drop.addEventListener(type, (event) => {
       event.preventDefault();
