@@ -141,13 +141,29 @@ def run() -> None:
                 page.wait_for_timeout(300)
                 body_text = page.locator("body").inner_text()
                 assert any(word in body_text for word in ("転倒", "家具", "耐震", "買い物")), "Japanese quake copy missing"
+                assert "証拠台帳" in page.locator("#run-title").inner_text()
+                assert "解放済み" in page.locator("#fleet").inner_text(), "Fleet states must translate after a run"
+                assert "領収書" in page.locator("#inspector").inner_text() and "推定使用年数" in page.locator("#inspector").inner_text()
+                assert "実際現金価額" in page.locator("#inspector").inner_text()
+                assert "証拠の切り抜き" in page.locator("#inspector .inspector-crop img").get_attribute("alt")
+                assert "わかりやすい表示" in page.locator("#plain-log-tab").inner_text()
+                assert "Preparing" not in page.locator("#plain-log").inner_text(), "Existing plain logs must retranslate"
+                assert "部屋" in page.locator("#run-toast").inner_text(), "Existing toast summaries must retranslate"
+                page.locator("#edit-item-button").click()
+                dialog_text = page.locator("#item-dialog").inner_text()
+                assert "項目名" in dialog_text and "領収書あり" in dialog_text and "変更を保存" in dialog_text and "項目を削除" in dialog_text
+                assert "Item label" not in dialog_text and "Save changes" not in dialog_text
+                page.locator("#close-item-dialog").click()
                 page.locator("#dismiss-toast").click()
                 page.evaluate("document.activeElement?.blur?.(); document.querySelector('.skip-link').hidden = true")
                 page.screenshot(path=str(ARTIFACTS / "03-quake-japanese.png"), full_page=True)
                 page.locator("#language-toggle").click()
+                assert "Your evidence ledger" in page.locator("#run-title").inner_text(), "English must restore dynamically"
                 page.locator("#theme-toggle").click()
                 assert page.locator("html").get_attribute("data-theme") == "dark", "Dark workbench must be available after a run"
                 page.screenshot(path=str(ARTIFACTS / "03b-inventory-dark.png"), full_page=True)
+                page.locator("#language-toggle").click()
+                assert page.locator("html").get_attribute("lang") == "ja", "Report must be generated in selected language"
 
                 with page.expect_download() as download_info:
                     page.locator("#csv-button").click()
@@ -164,7 +180,10 @@ def run() -> None:
                 report.wait_for_load_state("domcontentloaded")
                 report_text = report.locator("body").inner_text()
                 assert "AI estimates — verify with receipts. Not an insurance appraisal." in report_text
-                assert "receipt checked" in report_text and "Photo evidence fingerprint" in report_text and "UTC processing timestamp" in report_text
+                assert "receipt checked" in report_text and "写真の証拠フィンガープリント" in report_text and "UTC処理タイムスタンプ" in report_text
+                assert "家財一覧" in report_text and "付録: 算出方法と証拠" in report_text and "ブラウザで編集した現在の台帳" in report_text
+                assert "Consolidated inventory" not in report_text and "Annual depreciation" not in report_text, "Report chrome must translate completely"
+                assert report.locator("html").get_attribute("lang") == "ja"
                 assert report.locator("img").count() >= 7, "Report needs room photographs and item crops"
                 assert report.evaluate("getComputedStyle(document.documentElement).backgroundColor") == "rgb(255, 255, 255)", "Reports must remain light when opened from dark mode"
                 report.screenshot(path=str(ARTIFACTS / "04-report.png"), full_page=True)
@@ -191,6 +210,9 @@ def run() -> None:
                 assert mobile.locator("html").get_attribute("data-theme") == "light", "A fresh mobile browser must default to light"
                 mobile.locator("#sample-button").click()
                 mobile.locator("#run-toast").filter(has_text="6 rooms").wait_for(state="visible", timeout=90000)
+                mobile.locator("#language-toggle").click()
+                assert mobile.locator("html").get_attribute("lang") == "ja"
+                assert mobile.locator(".header-actions #language-toggle").is_visible(), "Mobile must retain universal language control"
                 mobile.wait_for_timeout(500)
                 overflow = mobile.evaluate("document.documentElement.scrollWidth - window.innerWidth")
                 assert overflow <= 1, f"Mobile layout overflows by {overflow} pixels"

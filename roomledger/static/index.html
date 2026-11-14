@@ -19,7 +19,7 @@
   <script src="/static/app.js" defer></script>
 </head>
 <body data-mode="insurance">
-  <a class="skip-link" href="#main">Skip to inventory</a>
+  <a class="skip-link" href="#main" data-ui-text="skipInventory">Skip to inventory</a>
 
   <header class="app-header initial-reveal">
     <div class="header-inner">
@@ -28,7 +28,7 @@
         <span id="environment-status" class="provider-pill"><span class="status-light is-checking" aria-hidden="true"></span><span>Checking workspace…</span></span>
         <span id="nosana-status" class="provider-pill" data-source="waiting">Nosana: checking</span>
       </div>
-      <nav class="header-actions" aria-label="Application settings and inventory actions">
+      <nav class="header-actions" aria-label="Application settings and inventory actions" data-ui-aria="applicationActions">
         <button class="button button-quiet language-toggle" id="language-toggle" type="button" aria-label="Switch interface to Japanese" title="Change interface language">
           <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>
           <span id="language-label">日本語</span>
@@ -53,12 +53,12 @@
   <main id="main">
     <section class="intake initial-reveal" id="intake" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <div class="section-marker"><span aria-hidden="true">⌖</span> Disaster inventory, made tangible</div>
+        <div class="section-marker"><span aria-hidden="true">⌖</span><span data-ui-text="heroMarker">Disaster inventory, made tangible</span></div>
         <h1 id="hero-title"><span data-ui-text="heroTitleA">Know what you own.</span><br><span data-ui-text="heroTitleB">Secure what matters.</span></h1>
         <p class="hero-summary" data-ui-text="heroSummary">Turn room photos into an evidence-backed home ledger for insurance recovery and a practical plan for the next earthquake.</p>
-        <ul class="hero-points" aria-label="What RoomLedger produces">
-          <li><span class="point-icon" aria-hidden="true">01</span><span><strong>Every visible item, mapped.</strong> Numbered boxes, evidence crops, replacement cost and actual cash value.</span></li>
-          <li><span class="point-icon" aria-hidden="true">02</span><span><strong>Falling hazards, prioritized.</strong> A room-aware quake score and a priced anchoring shopping list.</span></li>
+        <ul class="hero-points" aria-label="What RoomLedger produces" data-ui-aria="outputs">
+          <li><span class="point-icon" aria-hidden="true">01</span><span><strong data-ui-text="mappedTitle">Every visible item, mapped.</strong> <span data-ui-text="mappedBody">Numbered boxes, evidence crops, replacement cost and actual cash value.</span></span></li>
+          <li><span class="point-icon" aria-hidden="true">02</span><span><strong data-ui-text="hazardsTitle">Falling hazards, prioritized.</strong> <span data-ui-text="hazardsBody">A room-aware quake score and a priced anchoring shopping list.</span></span></li>
         </ul>
       </div>
 
@@ -98,43 +98,43 @@
           <span><strong data-ui-text="sampleHome">Try with sample home</strong><small data-ui-text="sampleDetails">6 rooms · cached offline demo</small></span>
           <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
         </button>
-        <p class="privacy-note"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M5 9V6a5 5 0 0 1 10 0v3M3 9h14v9H3z"/></svg>Fresh JPEGs are created without GPS or photo metadata. Original uploaded files are not retained.</p>
+        <p class="privacy-note"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M5 9V6a5 5 0 0 1 10 0v3M3 9h14v9H3z"/></svg><span data-ui-text="privacyNote">Fresh JPEGs are created without GPS or photo metadata. Original uploaded files are not retained.</span></p>
       </div>
     </section>
 
     <section id="results" class="results" aria-labelledby="run-title" hidden>
       <div class="run-heading">
         <div>
-          <div class="section-marker">Active inventory</div>
+          <div class="section-marker" data-ui-text="activeInventory">Active inventory</div>
           <h2 id="run-title">Reading your home</h2>
           <p id="run-context">Preparing a private workspace.</p>
         </div>
-        <button class="button button-quiet" id="reset-button" type="button" hidden>New inventory</button>
+        <button class="button button-quiet" id="reset-button" type="button" data-ui-text="newInventory" hidden>New inventory</button>
       </div>
       <div class="run-progress" aria-hidden="true"><span id="run-progress-bar"></span></div>
 
       <section class="fleet-section" id="fleet-section" aria-labelledby="fleet-title">
         <div class="fleet-heading">
           <div>
-            <h3 id="fleet-title">Room fleet</h3>
-            <p id="fleet-status" role="status">Starting workers…</p>
+            <h3 id="fleet-title" data-ui-text="roomFleet">Room fleet</h3>
+            <p id="fleet-status" role="status" data-ui-text="startingWorkers">Starting workers…</p>
           </div>
-          <div id="gpu-queue" class="gpu-queue" aria-label="GPU queue">
-            <div class="queue-copy"><span>GPU queue</span><strong id="queue-text">0 active · 0 waiting</strong></div>
+          <div id="gpu-queue" class="gpu-queue" data-ui-aria="gpuQueue">
+            <div class="queue-copy"><span data-ui-text="gpuQueue">GPU queue</span><strong id="queue-text">0 active · 0 waiting</strong></div>
             <div class="queue-track" aria-hidden="true"><span id="queue-active-bar"></span></div>
-            <small id="queue-limit">Waiting for capacity</small>
+            <small id="queue-limit" data-ui-text="waitingCapacity">Waiting for capacity</small>
           </div>
         </div>
-        <div id="fleet" class="fleet-grid" aria-label="Room processing states"></div>
+        <div id="fleet" class="fleet-grid" aria-label="Room processing states" data-ui-aria="fleetAria"></div>
       </section>
 
       <div id="run-error" class="run-error" role="alert" hidden>
-        <strong>No rooms made it into the ledger.</strong>
+        <strong data-ui-text="noRooms">No rooms made it into the ledger.</strong>
         <span id="run-error-message">Check the photos and try again.</span>
       </div>
 
       <section id="inventory" class="inventory" aria-labelledby="inventory-title" hidden>
-        <div class="stats-ledger" aria-label="Current edited inventory totals">
+        <div class="stats-ledger" aria-label="Current edited inventory totals" data-ui-aria="currentTotals">
           <div class="stat-primary"><span data-ui-text="replacementTotal">Replacement total</span><strong id="total-value">$0</strong><small data-ui-text="currentEdited">Current edited inventory</small></div>
           <div><span data-ui-text="actualCashValue">Actual cash value</span><strong id="acv-value">$0</strong><small data-ui-text="ageAdjusted">Age & condition adjusted</small></div>
           <div><span data-ui-text="itemsLabel">Items</span><strong id="item-count">0</strong><small data-ui-text="acrossRooms">Across all included rooms</small></div>
@@ -143,11 +143,11 @@
 
         <div class="ledger-toolbar">
           <div>
-            <h2 id="inventory-title">Evidence ledger</h2>
-            <p>Select a numbered box or item to inspect its evidence.</p>
+            <h2 id="inventory-title" data-ui-text="evidenceLedger">Evidence ledger</h2>
+            <p data-ui-text="selectEvidence">Select a numbered box or item to inspect its evidence.</p>
           </div>
           <div class="view-controls">
-            <div class="segmented-control" role="group" aria-label="Inventory view">
+            <div class="segmented-control" role="group" aria-label="Inventory view" data-ui-aria="inventoryView">
               <button id="mode-insurance" type="button" aria-pressed="true">
                 <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M3 9 10 3l7 6M5 8v9h10V8M8 17v-5h4v5"/></svg>
                 <span data-ui-text="insurance">Insurance</span>
@@ -160,7 +160,7 @@
           </div>
         </div>
 
-        <nav id="room-list" class="room-list" aria-label="Rooms"></nav>
+        <nav id="room-list" class="room-list" aria-label="Rooms" data-ui-aria="roomsNav"></nav>
 
         <section id="quake-panel" class="quake-panel" aria-labelledby="quake-title" hidden>
           <div class="readiness-block">
@@ -196,11 +196,11 @@
               <div id="photo-canvas" class="photo-canvas"></div>
               <figcaption id="photo-caption"></figcaption>
             </figure>
-            <div class="legend-heading"><h4 id="legend-title">Numbered inventory</h4><span id="legend-count"></span></div>
+            <div class="legend-heading"><h4 id="legend-title" data-ui-text="numberedInventory">Numbered inventory</h4><span id="legend-count"></span></div>
             <div id="item-legend" class="item-legend"></div>
           </div>
 
-          <aside id="inspector" class="inspector" aria-label="Item evidence inspector" aria-live="polite">
+          <aside id="inspector" class="inspector" aria-label="Item evidence inspector" aria-live="polite" data-ui-aria="itemInspector">
             <div class="inspector-empty">
               <svg aria-hidden="true" viewBox="0 0 48 48"><path d="M7 17V7h10M31 7h10v10M41 31v10H31M17 41H7V31"/><path d="M17 25h14M24 18v14"/></svg>
               <h3 data-ui-text="inspectEvidence">Inspect the evidence</h3>
@@ -211,8 +211,8 @@
 
         <section class="logs" aria-labelledby="logs-title">
           <div class="logs-heading">
-            <div><h3 id="logs-title">Run log</h3><p>Processing metadata only — never photo bytes.</p></div>
-            <div class="log-tabs" role="tablist" aria-label="Log detail">
+            <div><h3 id="logs-title" data-ui-text="runLog">Run log</h3><p data-ui-text="logPrivacy">Processing metadata only — never photo bytes.</p></div>
+            <div class="log-tabs" role="tablist" aria-label="Log detail" data-ui-aria="logDetail">
               <button id="plain-log-tab" role="tab" type="button" aria-selected="true" aria-controls="plain-log"><span data-ui-text="plainLanguage">Plain language</span></button>
               <button id="technical-log-tab" role="tab" type="button" aria-selected="false" aria-controls="technical-log" tabindex="-1"><span data-ui-text="technical">Technical</span></button>
             </div>
@@ -226,52 +226,52 @@
 
   <footer class="app-footer">
     <div class="brand brand-small">Room<span>Ledger</span></div>
-    <p>AI estimates — verify with receipts. Not an insurance appraisal.</p>
+    <p data-ui-text="disclaimer">AI estimates — verify with receipts. Not an insurance appraisal.</p>
   </footer>
 
   <dialog id="item-dialog" class="dialog" aria-labelledby="item-dialog-title">
     <form id="item-form" method="dialog">
       <div class="dialog-heading">
-        <div><span class="section-marker">Evidence correction</span><h2 id="item-dialog-title">Edit item</h2></div>
-        <button class="icon-button" id="close-item-dialog" type="button" aria-label="Close editor">×</button>
+        <div><span class="section-marker" data-ui-text="evidenceCorrection">Evidence correction</span><h2 id="item-dialog-title" data-ui-text="editItem">Edit item</h2></div>
+        <button class="icon-button" id="close-item-dialog" type="button" aria-label="Close editor" data-ui-aria="closeEditor">×</button>
       </div>
       <input id="edit-item-id" type="hidden">
       <div class="form-field">
-        <label for="edit-label">Item label</label>
+        <label for="edit-label" data-ui-text="itemLabel">Item label</label>
         <input id="edit-label" name="label" type="text" maxlength="160" required autocomplete="off">
       </div>
       <div class="form-row">
         <div class="form-field">
-          <label for="edit-price">Replacement price (USD)</label>
+          <label for="edit-price" data-ui-text="replacementPrice">Replacement price (USD)</label>
           <div class="currency-input"><span aria-hidden="true">$</span><input id="edit-price" name="replacement" type="number" min="0" max="1000000" step="0.01" required inputmode="decimal"></div>
         </div>
         <div class="form-field">
-          <label for="edit-condition">Condition</label>
+          <label for="edit-condition" data-ui-text="condition">Condition</label>
           <select id="edit-condition" name="condition">
-            <option value="new">New</option>
-            <option value="good">Good</option>
-            <option value="fair">Fair</option>
-            <option value="poor">Poor</option>
+            <option value="new" data-ui-text="newCondition">New</option>
+            <option value="good" data-ui-text="goodCondition">Good</option>
+            <option value="fair" data-ui-text="fairCondition">Fair</option>
+            <option value="poor" data-ui-text="poorCondition">Poor</option>
           </select>
         </div>
       </div>
-      <label class="checkbox-field" for="edit-receipt"><input id="edit-receipt" name="receipt" type="checkbox"><span><strong>Receipt available</strong><small>Mark this only when you have supporting proof.</small></span></label>
-      <div class="edit-calculation"><span>Actual cash value after saving</span><strong id="edit-acv-preview">$0.00</strong></div>
+      <label class="checkbox-field" for="edit-receipt"><input id="edit-receipt" name="receipt" type="checkbox"><span><strong data-ui-text="receiptAvailable">Receipt available</strong><small data-ui-text="receiptProof">Mark this only when you have supporting proof.</small></span></label>
+      <div class="edit-calculation"><span data-ui-text="acvAfterSave">Actual cash value after saving</span><strong id="edit-acv-preview">$0.00</strong></div>
       <p class="form-error" id="edit-error" role="alert" hidden></p>
       <div class="dialog-actions edit-actions">
-        <button class="text-button danger-text" id="delete-item-button" type="button">Delete item</button>
-        <div><button class="button button-quiet" id="cancel-edit-button" type="button">Cancel</button><button class="button button-gold" type="submit" value="save">Save changes</button></div>
+        <button class="text-button danger-text" id="delete-item-button" type="button" data-ui-text="deleteItem">Delete item</button>
+        <div><button class="button button-quiet" id="cancel-edit-button" type="button" data-ui-text="cancel">Cancel</button><button class="button button-gold" type="submit" value="save" data-ui-text="saveChanges">Save changes</button></div>
       </div>
     </form>
   </dialog>
 
   <dialog id="delete-dialog" class="dialog dialog-small" aria-labelledby="delete-dialog-title">
     <form id="delete-form" method="dialog">
-      <div class="dialog-heading"><h2 id="delete-dialog-title">Delete this item?</h2></div>
-      <p id="delete-confirmation-copy">The item will be removed from this browser ledger and exports. Its original inventory number will not be reassigned.</p>
+      <div class="dialog-heading"><h2 id="delete-dialog-title" data-ui-text="deleteConfirmTitle">Delete this item?</h2></div>
+      <p id="delete-confirmation-copy" data-ui-text="deleteConfirmBody">The item will be removed from this browser ledger and exports. Its original inventory number will not be reassigned.</p>
       <div class="dialog-actions">
-        <button class="button button-quiet" id="cancel-delete-button" type="button">Keep item</button>
-        <button class="button button-danger" type="submit" value="delete">Delete item</button>
+        <button class="button button-quiet" id="cancel-delete-button" type="button" data-ui-text="keepItem">Keep item</button>
+        <button class="button button-danger" type="submit" value="delete" data-ui-text="deleteItem">Delete item</button>
       </div>
     </form>
   </dialog>
@@ -279,7 +279,7 @@
   <div id="run-toast" class="toast" role="status" aria-live="polite" hidden>
     <span class="toast-mark" aria-hidden="true">✓</span>
     <div><strong id="toast-title">Inventory complete</strong><p id="toast-message"></p></div>
-    <button id="dismiss-toast" class="icon-button" type="button" aria-label="Dismiss summary">×</button>
+    <button id="dismiss-toast" class="icon-button" type="button" aria-label="Dismiss summary" data-ui-aria="dismissSummary">×</button>
   </div>
 </body>
 </html>
