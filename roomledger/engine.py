@@ -6,7 +6,6 @@ uses fixed JSON files so Daytona never needs to receive untrusted shell input.
 from __future__ import annotations
 
 import argparse
-import base64
 import hashlib
 import io
 import json
@@ -17,6 +16,8 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageOps
+
+Image.MAX_IMAGE_PIXELS = 40_000_000
 
 CATEGORIES = ("electronics", "furniture", "appliance", "kitchenware", "decor", "clothing", "sports", "musical", "other")
 CONDITIONS = ("new", "good", "fair", "poor")
@@ -125,6 +126,8 @@ def _suggest_risk(label: str, category: str, box: list[float], room_type: str) -
 def prepare_items(raw_items: list[dict[str, Any]], width: int, height: int, room_type: str = "other") -> list[dict[str, Any]]:
     items = []
     for index, raw in enumerate(raw_items):
+        if not isinstance(raw, dict):
+            continue
         label = str(raw.get("label") or raw.get("name") or "Household item")[:160]
         category = str(raw.get("category", "other")).lower()
         if category not in CATEGORIES:
@@ -137,7 +140,7 @@ def prepare_items(raw_items: list[dict[str, Any]], width: int, height: int, room
         else:  # Daytona executes engine.py as a top-level script beside nosana.py.
             from nosana import _normalise
         try:
-            box = _normalise(raw.get("box") or [0, 0, 1000, 1000], width, height)
+            box = _normalise(raw.get("box"), width, height)
         except (TypeError, ValueError):
             continue
         replacement, flag = clamp_price(label, category, raw.get("replacement_usd", raw.get("price_usd", raw.get("price", 100))))

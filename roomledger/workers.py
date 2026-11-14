@@ -5,7 +5,11 @@ import asyncio
 import base64
 import json
 import os
+import threading
+import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -16,13 +20,14 @@ Emit = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 class GPUScheduler:
-    def __init__(self, limit: int, emit: Emit):
-        self.semaphore = asyncio.Semaphore(limit)
+    def __init__(self, limit: int, emit: Emit, semaphore: asyncio.Semaphore | None = None):
+        self.semaphore = semaphore or asyncio.Semaphore(limit)
         self.limit = limit
         self.waiting = 0
         self.active = 0
         self.emit = emit
-        self.timeout = float(os.getenv("NOSANA_TIMEOUT", "60")) + 15
+        # Covers the bounded reasoning-field retry as well as the initial HTTP request.
+        self.timeout = float(os.getenv("NOSANA_TIMEOUT", "60")) * 2 + 20
 
     async def _queue_event(self) -> None:
         await self.emit({"type": "queue", "waiting": self.waiting, "active": self.active, "limit": self.limit})
@@ -47,22 +52,38 @@ class GPUScheduler:
 
     async def run(self, function: Callable[..., InferenceResult], *args: Any) -> InferenceResult:
         async with self.slot():
-            return await asyncio.wait_for(asyncio.to_thread(function, *args), timeout=self.timeout)
+            operation = asyncio.create_task(asyncio.to_thread(function, *args))
+            try:
+                return await asyncio.wait_for(asyncio.shield(operation), timeout=self.timeout)
+            except BaseException:
+                # Cancelling to_thread does not stop urllib. Keep the GPU permit until
+                # the underlying request really exits, including on SSE disconnect.
+                while not operation.done():
+                    try:
+                        await asyncio.shield(operation)
+                    except asyncio.CancelledError:
+                        continue
+                    except BaseException:
+                        break
+                raise
 
 
 class LocalWorker:
     live = False
+    merge_on_host = True
 
-    def __init__(self, emit: Emit):
+    def __init__(self, emit: Emit, run_id: str = "manual"):
         self.emit = emit
+        self.run_id = run_id
         self.max_side = int(os.getenv("ROOMLEDGER_MAX_SIDE", "1024"))
-        self.refine_count = int(os.getenv("ROOMLEDGER_REFINE_COUNT", "6"))
+        self.refine_count = max(0, min(6, int(os.getenv("ROOMLEDGER_REFINE_COUNT", "6"))))
 
     async def state(self, room: int, state: str, worker_id: str, **extra: Any) -> None:
         await self.emit({"type": "state", "room": room, "state": state, "sandbox": worker_id, **extra})
 
     async def process(self, room: int, name: str, raw: bytes, client: NosanaClient, gpu: GPUScheduler) -> dict[str, Any]:
         worker_id = f"local-{room + 1:02d}"
+        started = time.monotonic()
         await self.state(room, "creating", worker_id)
         await self.state(room, "sanitizing", worker_id)
         clean, metadata = await asyncio.to_thread(sanitize, raw, self.max_side)
@@ -74,9 +95,9 @@ class LocalWorker:
         room_type = str(detection.data.get("room_type", "other"))
         prepared = await asyncio.to_thread(prepare_items, detection.data.get("items", []), metadata["width"], metadata["height"], room_type)
         crops = [await asyncio.to_thread(crop_item, clean, item["box"]) for item in prepared]
-        prepared, crops = await self._refine(room, worker_id, client, gpu, prepared, crops)
+        prepared, crops, _ = await self._refine(room, worker_id, client, gpu, prepared, crops)
         result = self._room_result(room, name, clean, metadata, room_type, prepared, crops)
-        await self.state(room, "released", worker_id, cleanup="released", elapsed=0)
+        await self.state(room, "released", worker_id, cleanup="released", elapsed=round(time.monotonic() - started, 2))
         return result
 
     async def _inference_log(self, room: int, result: InferenceResult, count: int) -> None:
@@ -86,10 +107,10 @@ class LocalWorker:
                          "message": f"{result.source.upper()} · {result.model} · {count} detections{suffix}"})
 
     async def _refine(self, room: int, worker_id: str, client: NosanaClient, gpu: GPUScheduler,
-                      items: list[dict[str, Any]], crops: list[bytes]) -> tuple[list[dict[str, Any]], list[bytes]]:
+                      items: list[dict[str, Any]], crops: list[bytes]) -> tuple[list[dict[str, Any]], list[bytes], dict[str, Any]]:
         candidates = sorted(range(len(items)), key=lambda index: items[index]["replacement_usd"], reverse=True)[:self.refine_count]
         if not candidates:
-            return items, crops
+            return items, crops, {}
         await self.state(room, "refining", worker_id, count=len(candidates))
         await self.emit({"type": "log", "room": room, "level": "plain", "message": f"Refining {len(candidates)} high-value items…"})
 
@@ -97,15 +118,18 @@ class LocalWorker:
             return index, await gpu.run(client.refine, crops[index], items[index])
 
         outcomes = await asyncio.gather(*(verify(index) for index in candidates), return_exceptions=True)
+        refinements: dict[str, Any] = {}
         for outcome in outcomes:
             if isinstance(outcome, BaseException):
                 await self.emit({"type": "log", "room": room, "level": "technical",
                                  "message": f"Refinement skipped: {type(outcome).__name__}; original estimate retained"})
                 continue
             index, result = outcome
-            items[index] = merge_refinement(items[index], result.data)
+            refinements[items[index]["id"]] = result.data
+            if self.merge_on_host:
+                items[index] = merge_refinement(items[index], result.data)
             await self._inference_log(room, result, 1)
-        return items, crops
+        return items, crops, refinements
 
     @staticmethod
     def _room_result(room: int, name: str, clean: bytes, metadata: dict[str, Any], room_type: str,
@@ -129,9 +153,10 @@ class SandboxWorker(LocalWorker):
     semaphore across independent sandboxes. Only sanitized images/crops leave it.
     """
     live = True
+    merge_on_host = False
 
-    def __init__(self, emit: Emit):
-        super().__init__(emit)
+    def __init__(self, emit: Emit, run_id: str = "manual"):
+        super().__init__(emit, run_id)
         from daytona import Daytona, DaytonaConfig
         config = DaytonaConfig(api_key=os.environ["DAYTONA_API_KEY"], api_url=os.getenv("DAYTONA_API_URL") or None)
         self.daytona = Daytona(config)
@@ -144,12 +169,14 @@ class SandboxWorker(LocalWorker):
         """Delete only sandboxes explicitly labelled as belonging to RoomLedger."""
         from daytona import ListSandboxesQuery
         deleted = 0
-        for sandbox in self.daytona.list(ListSandboxesQuery(labels={"app": "roomledger"})):
-            sandbox.delete(timeout=30)
+        stale_before = datetime.now(timezone.utc) - timedelta(minutes=5)
+        query = ListSandboxesQuery(labels={"app": "roomledger"}, created_at_before=stale_before)
+        for sandbox in self.daytona.list(query, request_timeout=30):
+            sandbox.delete(timeout=30, wait=True)
             deleted += 1
         return deleted
 
-    def _create(self, run_id: str):
+    def _create(self, run_id: str, cancelled: threading.Event | None = None):
         from daytona import CreateSandboxFromImageParams, CreateSandboxFromSnapshotParams, Image
         common = {
             "language": "python", "labels": {"app": "roomledger", "run": run_id},
@@ -160,7 +187,22 @@ class SandboxWorker(LocalWorker):
         else:
             image = Image.debian_slim("3.12").pip_install(["Pillow"]).workdir("/home/daytona")
             params = CreateSandboxFromImageParams(image=image, **common)
-        return self.daytona.create(params, timeout=90)
+        try:
+            sandbox = self.daytona.create(params, timeout=90)
+        except Exception as creation_error:
+            # Daytona attach sandbox_id when creation succeeded but startup timed out.
+            sandbox_id = getattr(creation_error, "sandbox_id", None)
+            if sandbox_id:
+                try:
+                    orphaned = self.daytona.get(str(sandbox_id), request_timeout=20)
+                    orphaned.delete(timeout=25, wait=True)
+                except Exception as cleanup_error:
+                    raise RuntimeError(f"Daytona creation failed and sandbox {sandbox_id} needs cleanup review; its TTL is 30 minutes") from cleanup_error
+            raise
+        if cancelled and cancelled.is_set():
+            sandbox.delete(timeout=40, wait=True)
+            raise TimeoutError("Daytona creation completed after caller cancellation; sandbox was destroyed")
+        return sandbox
 
     @staticmethod
     def _check(response: Any) -> None:
@@ -171,56 +213,59 @@ class SandboxWorker(LocalWorker):
 
     async def process(self, room: int, name: str, raw: bytes, client: NosanaClient, gpu: GPUScheduler) -> dict[str, Any]:
         sandbox = None
+        creation_cancelled = threading.Event()
         worker_id = "creating"
         started = asyncio.get_running_loop().time()
         try:
             await self.state(room, "creating", worker_id)
-            run_id = os.getenv("ROOMLEDGER_RUN_ID", "manual")[:48]
-            sandbox = await self._call(self._create, run_id, timeout=100)
+            try:
+                sandbox = await self._call(self._create, self.run_id[:48], creation_cancelled, timeout=100)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                # The synchronous creator reconciles a late sandbox against this flag.
+                creation_cancelled.set()
+                raise
             worker_id = str(sandbox.id)
             await self.state(room, "sanitizing", worker_id)
             engine_bytes = Path(__file__).with_name("engine.py").read_bytes()
             nosana_bytes = Path(__file__).with_name("nosana.py").read_bytes()
-            await self._call(sandbox.fs.upload_file, raw, "input.upload")
-            await self._call(sandbox.fs.upload_file, engine_bytes, "engine.py")
-            await self._call(sandbox.fs.upload_file, nosana_bytes, "nosana.py")
+            await self._call(sandbox.fs.upload_file, raw, "input.upload", 60)
+            await self._call(sandbox.fs.upload_file, engine_bytes, "engine.py", 60)
+            await self._call(sandbox.fs.upload_file, nosana_bytes, "nosana.py", 60)
             response = await self._call(sandbox.process.exec, f"python3 engine.py sanitize input.upload sanitized.jpg metadata.json --max-side {self.max_side}", timeout=90)
             self._check(response)
-            clean = await self._call(sandbox.fs.download_file, "sanitized.jpg")
-            metadata = json.loads((await self._call(sandbox.fs.download_file, "metadata.json")).decode("utf-8"))
+            clean = await self._call(sandbox.fs.download_file, "sanitized.jpg", 60)
+            metadata = json.loads((await self._call(sandbox.fs.download_file, "metadata.json", 60)).decode("utf-8"))
             await self.emit({"type": "log", "room": room, "level": "plain", "message": f"Sandbox {worker_id[:8]} removed GPS and photo metadata"})
             await self.state(room, "detecting", worker_id, gpu=True)
             detection = await gpu.run(client.detect, clean)
             await self._inference_log(room, detection, len(detection.data.get("items", [])))
             detection_payload = {**detection.data, "width": metadata["width"], "height": metadata["height"]}
-            await self._call(sandbox.fs.upload_file, json.dumps(detection_payload).encode("utf-8"), "detections.json")
+            await self._call(sandbox.fs.upload_file, json.dumps(detection_payload).encode("utf-8"), "detections.json", 60)
             await self.state(room, "scoring", worker_id)
             response = await self._call(sandbox.process.exec, "python3 engine.py prepare sanitized.jpg detections.json prepared.json crops", timeout=90)
             self._check(response)
-            prepared_data = json.loads((await self._call(sandbox.fs.download_file, "prepared.json")).decode("utf-8"))
+            prepared_data = json.loads((await self._call(sandbox.fs.download_file, "prepared.json", 60)).decode("utf-8"))
             prepared = prepared_data["items"]
             crops = []
             for item in prepared:
-                crops.append(await self._call(sandbox.fs.download_file, item["crop_file"]))
+                crops.append(await self._call(sandbox.fs.download_file, item["crop_file"], 60))
             # Crop paths are local to the sandbox and never become public evidence.
             for item in prepared:
                 item.pop("crop_file", None)
-            prepared, crops = await self._refine(room, worker_id, client, gpu, prepared, crops)
-            # Re-run merging in the sandbox if refinement changed any original records.
-            refinements = {item["id"]: {key: item[key] for key in ("label", "condition", "replacement_usd", "brand_model", "confidence")}
-                           for item in prepared if item.get("verified")}
+            prepared, crops, refinements = await self._refine(room, worker_id, client, gpu, prepared, crops)
+            # Live valuation/merge runs exclusively inside Daytona from raw model JSON.
             if refinements:
-                # Download the untouched prepared file again as the merge base.
-                await self._call(sandbox.fs.upload_file, json.dumps(refinements).encode("utf-8"), "refinements.json")
+                # prepared.json remains the untouched detection/valuation base.
+                await self._call(sandbox.fs.upload_file, json.dumps(refinements).encode("utf-8"), "refinements.json", 60)
                 response = await self._call(sandbox.process.exec, "python3 engine.py finalize prepared.json refinements.json finalized.json", timeout=60)
                 self._check(response)
-                prepared = json.loads((await self._call(sandbox.fs.download_file, "finalized.json")).decode("utf-8"))["items"]
+                prepared = json.loads((await self._call(sandbox.fs.download_file, "finalized.json", 60)).decode("utf-8"))["items"]
             result = self._room_result(room, name, clean, metadata, prepared_data["room_type"], prepared, crops)
             return result
         finally:
             if sandbox is not None:
                 try:
-                    await self._call(sandbox.delete, timeout=45)
+                    await self._call(partial(sandbox.delete, timeout=40, wait=True), timeout=50)
                     await self.state(room, "destroyed", worker_id, cleanup="destroyed", elapsed=round(asyncio.get_running_loop().time() - started, 2))
                     await self.emit({"type": "log", "room": room, "level": "technical", "message": f"Daytona sandbox {worker_id} destroyed"})
                 except Exception as exc:

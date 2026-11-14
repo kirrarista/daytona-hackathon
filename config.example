@@ -1,0 +1,16 @@
+# Offline by default. Copy this template to your local dotenv file and fill only the services you use.
+DAYTONA_API_KEY=
+DAYTONA_API_URL=
+NOSANA_URL=
+NOSANA_API_KEY=
+NOSANA_MODEL=qwen3.5:9b
+NOSANA_CONCURRENCY=2
+NOSANA_TIMEOUT=60
+ROOMLEDGER_MAX_SIDE=1024
+ROOMLEDGER_ITEM_CAP=15
+ROOMLEDGER_REFINE_COUNT=6
+ROOMLEDGER_MAX_ROOMS=8
+# Optional pre-built Daytona snapshot with Pillow installed.
+DAYTONA_SNAPSHOT=
+# Never enable this for a live sponsor demonstration.
+ALLOW_MOCK_FALLBACK=false

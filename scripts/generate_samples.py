@@ -1,7 +1,6 @@
 """Generate original illustrated sample rooms and their zero-network inference cache."""
 from __future__ import annotations
 
-import hashlib
 import sys
 from pathlib import Path
 
@@ -19,11 +18,13 @@ ROOMS = [("entry-bedroom", "bedroom"), ("living-room-west", "living_room"), ("fa
          ("work-studio", "office"), ("reading-room", "living_room"), ("main-bedroom", "bedroom")]
 
 
-def illustration(room_type: str, nonce: int) -> Image.Image:
+def illustration(room_type: str, nonce: int, variant: int = 0) -> Image.Image:
     image = Image.new("RGB", (1200, 900), "#c5bfae")
     draw = ImageDraw.Draw(image)
-    draw.rectangle((0, 0, 1200, 610), fill="#b8b4a7")
-    draw.polygon([(0, 610), (1200, 610), (1200, 900), (0, 900)], fill="#776c5a")
+    wall = (184 - variant * 5, 180 - variant * 3, 167 + variant * 4)
+    floor = (119 + variant * 4, 108 + variant * 2, 90 + variant * 3)
+    draw.rectangle((0, 0, 1200, 610), fill=wall)
+    draw.polygon([(0, 610), (1200, 610), (1200, 900), (0, 900)], fill=floor)
     for x in range(0, 1201, 130):
         draw.line((x, 610, x + 90, 900), fill="#8c7c66", width=3)
     draw.rectangle((50, 80, 300, 370), fill="#57707a")
@@ -74,9 +75,9 @@ def main() -> None:
     SAMPLES.mkdir(parents=True, exist_ok=True)
     CACHE.mkdir(exist_ok=True)
     client = NosanaClient(CACHE, cache_prefix="sample-", offline=True)
-    for filename, target_type in ROOMS:
+    for variant, (filename, target_type) in enumerate(ROOMS):
         for nonce in range(1000):
-            image = illustration(target_type, nonce)
+            image = illustration(target_type, nonce, variant)
             destination = SAMPLES / f"{filename}.jpg"
             image.save(destination, "JPEG", quality=92)
             clean, metadata = sanitize(destination.read_bytes(), 1024)

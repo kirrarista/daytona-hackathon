@@ -23,6 +23,11 @@ def test_extract_json_rejects_empty_or_invalid():
         extract_json("No usable object here")
 
 
+def test_thinking_decoy_is_never_selected():
+    raw = '<think>{"items":[{"label":"decoy"}]}</think>{"items":[{"label":"final answer"}]}'
+    assert extract_json(raw)["items"][0]["label"] == "final answer"
+
+
 def test_cache_precedes_network_and_sample_is_offline(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("NOSANA_URL", "https://example.invalid/v1")
     monkeypatch.setenv("NOSANA_MODEL", "vision-test")
@@ -30,11 +35,20 @@ def test_cache_precedes_network_and_sample_is_offline(tmp_path: Path, monkeypatc
     first = client.detect(b"same sanitized image")
     assert first.source == "mock"
 
+    def no_network(*args, **kwargs):
+        raise AssertionError("Offline cache unexpectedly used HTTP")
+
+    monkeypatch.setattr("urllib.request.urlopen", no_network)
+    second = NosanaClient(tmp_path, cache_prefix="sample-", offline=True).detect(b"same sanitized image")
+    assert second.source == "cache" and second.model == "roomledger-offline-fixture"
+    payload = json.loads(next(tmp_path.glob("sample-*.json")).read_text())
+    assert payload["origin"] == "mock" and payload["model"] == "roomledger-offline-fixture"
+
     online = NosanaClient(tmp_path, cache_prefix="sample-", offline=False)
-    # A configured endpoint still reads the exact sample cache without calling HTTP.
-    second = online.detect(b"same sanitized image")
-    assert second.source == "cache"
-    assert list(tmp_path.glob("sample-*.json"))
+    assert online._namespace != client._namespace, "Live endpoint cannot consume offline mock provenance"
+    monkeypatch.setenv("NOSANA_URL", "https://different.example/v1")
+    other = NosanaClient(tmp_path, cache_prefix="sample-", offline=False)
+    assert other._namespace != online._namespace, "Different endpoints need separate cache namespaces"
 
 
 def test_refinement_cache_is_record_specific(tmp_path: Path, monkeypatch):

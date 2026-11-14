@@ -54,12 +54,16 @@ def configured_status() -> dict[str, Any]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.cleanup_warning = None
+    app.state.gpu_semaphore = asyncio.Semaphore(max(1, int(os.getenv("NOSANA_CONCURRENCY", "2"))))
+    app.state.room_semaphore = asyncio.Semaphore(min(8, int(os.getenv("ROOMLEDGER_MAX_ROOMS", "8"))))
     if os.getenv("DAYTONA_API_KEY"):
         async def silent(_event: dict[str, Any]) -> None:
             return None
         try:
             worker = SandboxWorker(silent)
-            removed = await asyncio.wait_for(asyncio.to_thread(worker.sweep), timeout=45)
+            # Complete the stale-labelled sweep before serving; abandoning its thread
+            # could otherwise let startup cleanup race newly-created room sandboxes.
+            removed = await asyncio.to_thread(worker.sweep)
             app.state.cleanup_warning = f"Startup removed {removed} leftover RoomLedger sandboxes" if removed else None
         except Exception as exc:
             app.state.cleanup_warning = f"Daytona orphan sweep could not complete: {type(exc).__name__}"
@@ -107,7 +111,6 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
         payloads.append((name, raw))
 
     run_id = uuid.uuid4().hex[:12]
-    os.environ["ROOMLEDGER_RUN_ID"] = run_id
     events: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
 
     async def emit(event: dict[str, Any]) -> None:
@@ -116,7 +119,7 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
     daytona_live = bool(os.getenv("DAYTONA_API_KEY"))
     client = NosanaClient(CACHE, cache_prefix="sample-" if sample else "", offline=sample,
                           allow_mock_fallback=os.getenv("ALLOW_MOCK_FALLBACK", "false").lower() == "true")
-    gpu = GPUScheduler(max(1, int(os.getenv("NOSANA_CONCURRENCY", "2"))), emit)
+    gpu = GPUScheduler(max(1, int(os.getenv("NOSANA_CONCURRENCY", "2"))), emit, app.state.gpu_semaphore)
 
     async def stream():
         started = time.monotonic()
@@ -127,9 +130,10 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
             await emit({"type": "log", "room": -1, "level": "technical", "message": app.state.cleanup_warning})
 
         async def run_room(index: int, name: str, raw: bytes) -> None:
-            worker: LocalWorker = SandboxWorker(emit) if daytona_live else LocalWorker(emit)
             try:
-                result = await worker.process(index, name, raw, client, gpu)
+                async with app.state.room_semaphore:
+                    worker: LocalWorker = SandboxWorker(emit, run_id) if daytona_live else LocalWorker(emit, run_id)
+                    result = await worker.process(index, name, raw, client, gpu)
                 await emit({"type": "room", "room": index, "result": result})
             except Exception as exc:
                 await emit({"type": "error", "room": index, "message": f"{type(exc).__name__}: {str(exc)[:240]}"})
@@ -137,7 +141,8 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
 
         tasks = [asyncio.create_task(run_room(index, name, raw)) for index, (name, raw) in enumerate(payloads)]
         rooms: list[dict[str, Any]] = []
-        destroyed = 0
+        sandbox_ids: set[str] = set()
+        destroyed_ids: set[str] = set()
         failures = 0
         pending = set(tasks)
         try:
@@ -152,8 +157,10 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
                     event = events.get_nowait()
                 if event["type"] == "room":
                     rooms.append(event["result"])
-                elif event["type"] == "state" and event.get("cleanup") == "destroyed":
-                    destroyed += 1
+                elif event["type"] == "state" and daytona_live and event.get("sandbox") not in (None, "creating"):
+                    sandbox_ids.add(str(event["sandbox"]))
+                    if event.get("cleanup") == "destroyed":
+                        destroyed_ids.add(str(event["sandbox"]))
                 elif event["type"] == "error":
                     failures += 1
                 yield encode_sse(event)
@@ -167,8 +174,9 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
                 for room in rooms:
                     yield encode_sse({"type": "room", "room": room["index"], "result": room})
             summary = {
-                "type": "summary", "rooms": len(rooms), "sandboxes": destroyed if daytona_live else 0,
-                "destroyed": destroyed, "items": sum(len(room["items"]) for room in rooms),
+                "type": "summary", "rooms": len(rooms), "sandboxes": len(sandbox_ids),
+                "destroyed": len(destroyed_ids), "all_destroyed": bool(sandbox_ids) and sandbox_ids == destroyed_ids,
+                "items": sum(len(room["items"]) for room in rooms),
                 "duration_seconds": round(time.monotonic() - started, 1), "files_retained": 0,
                 "failures": failures, "daytona_mode": "live" if daytona_live else "local",
             }

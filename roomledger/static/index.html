@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1420">
+  <meta name="description" content="RoomLedger turns room photos into an editable disaster inventory with evidence crops, replacement values, and earthquake safety actions.">
+  <title>RoomLedger — Home inventory & quake readiness</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body data-mode="insurance">
+  <a class="skip-link" href="#main">Skip to inventory</a>
+
+  <header class="app-header initial-reveal">
+    <div class="header-inner">
+      <div class="brand" aria-label="RoomLedger">Room<span>Ledger</span></div>
+      <div class="header-status" role="status">
+        <span id="environment-status" class="provider-pill"><span class="status-light is-checking" aria-hidden="true"></span><span>Checking workspace…</span></span>
+        <span id="nosana-status" class="provider-pill" data-source="waiting">Nosana: checking</span>
+      </div>
+      <nav class="header-actions" aria-label="Inventory actions">
+        <button class="button button-quiet" id="csv-button" type="button" disabled>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4"/></svg>
+          Export CSV
+        </button>
+        <button class="button button-quiet" id="report-button" type="button" disabled>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7zM15 3v5h4M10 12h6m-6 4h6M5 7H3v14h12v-2"/></svg>
+          Print report
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="intake initial-reveal" id="intake" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <div class="section-marker"><span aria-hidden="true">⌖</span> Disaster inventory, made tangible</div>
+        <h1 id="hero-title">Know what you own.<br>Secure what matters.</h1>
+        <p class="hero-summary">Turn room photos into an evidence-backed home ledger for insurance recovery and a practical plan for the next earthquake.</p>
+        <ul class="hero-points" aria-label="What RoomLedger produces">
+          <li><span class="point-icon" aria-hidden="true">01</span><span><strong>Every visible item, mapped.</strong> Numbered boxes, evidence crops, replacement cost and actual cash value.</span></li>
+          <li><span class="point-icon" aria-hidden="true">02</span><span><strong>Falling hazards, prioritized.</strong> A room-aware quake score and a priced anchoring shopping list.</span></li>
+        </ul>
+      </div>
+
+      <div class="intake-panel">
+        <div class="intake-heading">
+          <div>
+            <h2>Start with your rooms</h2>
+            <p>JPEG, PNG or WebP · up to 8 photos · 12 MB each</p>
+          </div>
+          <svg class="scan-icon" aria-hidden="true" viewBox="0 0 40 40"><path d="M4 14V4h10M26 4h10v10M36 26v10H26M14 36H4V26"/><path d="M12 20h16M20 12v16"/></svg>
+        </div>
+
+        <form id="upload-form" novalidate>
+          <input class="visually-hidden" id="file-input" name="files" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+          <div id="drop-zone" class="drop-zone">
+            <label for="file-input" class="drop-label">
+              <span class="drop-symbol" aria-hidden="true">
+                <svg viewBox="0 0 32 32"><path d="M16 22V6m0 0-6 6m6-6 6 6M5 20v7h22v-7"/></svg>
+              </span>
+              <strong>Drop room photos here</strong>
+              <span>or <u>choose from your device</u></span>
+            </label>
+          </div>
+          <div id="selected-files" class="selected-files" hidden>
+            <div id="selected-file-list" class="selected-file-list"></div>
+            <div class="selected-actions">
+              <button class="text-button" id="clear-files" type="button">Clear selection</button>
+              <button class="button button-gold" id="analyze-button" type="submit">Analyze selected rooms</button>
+            </div>
+          </div>
+          <p class="form-error" id="upload-error" role="alert" hidden></p>
+        </form>
+
+        <div class="sample-divider"><span>No photos handy?</span></div>
+        <button class="sample-button" id="sample-button" type="button">
+          <span class="sample-grid" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span><strong>Try with sample home</strong><small>6 rooms · cached offline demo</small></span>
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></svg>
+        </button>
+        <p class="privacy-note"><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M5 9V6a5 5 0 0 1 10 0v3M3 9h14v9H3z"/></svg>Fresh JPEGs are created without GPS or photo metadata. Original uploaded files are not retained.</p>
+      </div>
+    </section>
+
+    <section id="results" class="results" aria-labelledby="run-title" hidden>
+      <div class="run-heading">
+        <div>
+          <div class="section-marker">Active inventory</div>
+          <h2 id="run-title">Reading your home</h2>
+          <p id="run-context">Preparing a private workspace.</p>
+        </div>
+        <button class="button button-quiet" id="reset-button" type="button" hidden>New inventory</button>
+      </div>
+      <div class="run-progress" aria-hidden="true"><span id="run-progress-bar"></span></div>
+
+      <section class="fleet-section" id="fleet-section" aria-labelledby="fleet-title">
+        <div class="fleet-heading">
+          <div>
+            <h3 id="fleet-title">Room fleet</h3>
+            <p id="fleet-status" role="status">Starting workers…</p>
+          </div>
+          <div id="gpu-queue" class="gpu-queue" aria-label="GPU queue">
+            <div class="queue-copy"><span>GPU queue</span><strong id="queue-text">0 active · 0 waiting</strong></div>
+            <div class="queue-track" aria-hidden="true"><span id="queue-active-bar"></span></div>
+            <small id="queue-limit">Waiting for capacity</small>
+          </div>
+        </div>
+        <div id="fleet" class="fleet-grid" aria-label="Room processing states"></div>
+      </section>
+
+      <div id="run-error" class="run-error" role="alert" hidden>
+        <strong>No rooms made it into the ledger.</strong>
+        <span id="run-error-message">Check the photos and try again.</span>
+      </div>
+
+      <section id="inventory" class="inventory" aria-labelledby="inventory-title" hidden>
+        <div class="stats-ledger" aria-label="Current edited inventory totals">
+          <div class="stat-primary"><span>Replacement total</span><strong id="total-value">$0</strong><small>Current edited inventory</small></div>
+          <div><span>Actual cash value</span><strong id="acv-value">$0</strong><small>Age & condition adjusted</small></div>
+          <div><span>Items</span><strong id="item-count">0</strong><small>Across all included rooms</small></div>
+          <div><span>Rooms</span><strong id="room-count">0</strong><small>With usable evidence</small></div>
+        </div>
+
+        <div class="ledger-toolbar">
+          <div>
+            <h2 id="inventory-title">Evidence ledger</h2>
+            <p>Select a numbered box or item to inspect its evidence.</p>
+          </div>
+          <div class="view-controls">
+            <div class="segmented-control" role="group" aria-label="Inventory view">
+              <button id="mode-insurance" type="button" aria-pressed="true">
+                <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M3 9 10 3l7 6M5 8v9h10V8M8 17v-5h4v5"/></svg>
+                Insurance
+              </button>
+              <button id="mode-quake" type="button" aria-pressed="false">
+                <svg aria-hidden="true" viewBox="0 0 20 20"><path d="m2 12 3-5 3 7 3-11 3 13 2-6 2 2"/></svg>
+                Quake-Ready
+              </button>
+            </div>
+            <button class="language-toggle" id="language-toggle" type="button" aria-label="Switch quake interface to Japanese" hidden>日本語</button>
+          </div>
+        </div>
+
+        <nav id="room-list" class="room-list" aria-label="Rooms"></nav>
+
+        <section id="quake-panel" class="quake-panel" aria-labelledby="quake-title" hidden>
+          <div class="readiness-block">
+            <div class="readiness-gauge" id="readiness-meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+              <svg viewBox="0 0 160 160" aria-hidden="true">
+                <circle class="gauge-track" cx="80" cy="80" r="66"/>
+                <circle class="gauge-value" id="readiness-ring" cx="80" cy="80" r="66" pathLength="100"/>
+              </svg>
+              <div><strong id="readiness-score">100</strong><span id="readiness-unit">/ 100</span></div>
+            </div>
+            <div class="readiness-copy">
+              <h3 id="quake-title">Quake readiness</h3>
+              <p id="readiness-summary">A relative tip-over risk score, not a structural safety rating.</p>
+              <span class="score-band" id="readiness-band">Secure high-risk items first</span>
+            </div>
+          </div>
+          <div class="quake-actions">
+            <div class="quake-actions-heading">
+              <h3 id="shopping-title">Anchoring shopping list</h3>
+              <span id="shopping-total">¥0 estimated</span>
+            </div>
+            <div id="shopping-list" class="shopping-list"></div>
+          </div>
+        </section>
+
+        <div class="workbench">
+          <div class="room-stage">
+            <div class="room-heading">
+              <div><h3 id="active-room-name">Room</h3><p id="active-room-meta"></p></div>
+              <span id="active-room-risk" class="room-risk" hidden></span>
+            </div>
+            <figure class="photo-figure">
+              <div id="photo-canvas" class="photo-canvas"></div>
+              <figcaption id="photo-caption"></figcaption>
+            </figure>
+            <div class="legend-heading"><h4 id="legend-title">Numbered inventory</h4><span id="legend-count"></span></div>
+            <div id="item-legend" class="item-legend"></div>
+          </div>
+
+          <aside id="inspector" class="inspector" aria-label="Item evidence inspector" aria-live="polite">
+            <div class="inspector-empty">
+              <svg aria-hidden="true" viewBox="0 0 48 48"><path d="M7 17V7h10M31 7h10v10M41 31v10H31M17 41H7V31"/><path d="M17 25h14M24 18v14"/></svg>
+              <h3>Inspect the evidence</h3>
+              <p>Choose a numbered box or item. You can verify the crop, correct details, and keep totals current.</p>
+            </div>
+          </aside>
+        </div>
+
+        <section class="logs" aria-labelledby="logs-title">
+          <div class="logs-heading">
+            <div><h3 id="logs-title">Run log</h3><p>Processing metadata only — never photo bytes.</p></div>
+            <div class="log-tabs" role="tablist" aria-label="Log detail">
+              <button id="plain-log-tab" role="tab" type="button" aria-selected="true" aria-controls="plain-log">Plain language</button>
+              <button id="technical-log-tab" role="tab" type="button" aria-selected="false" aria-controls="technical-log" tabindex="-1">Technical</button>
+            </div>
+          </div>
+          <div id="plain-log" class="log-pane" role="tabpanel" aria-labelledby="plain-log-tab" tabindex="0"></div>
+          <div id="technical-log" class="log-pane" role="tabpanel" aria-labelledby="technical-log-tab" tabindex="0" hidden></div>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div class="brand brand-small">Room<span>Ledger</span></div>
+    <p>AI estimates — verify with receipts. Not an insurance appraisal.</p>
+  </footer>
+
+  <dialog id="item-dialog" class="dialog" aria-labelledby="item-dialog-title">
+    <form id="item-form" method="dialog">
+      <div class="dialog-heading">
+        <div><span class="section-marker">Evidence correction</span><h2 id="item-dialog-title">Edit item</h2></div>
+        <button class="icon-button" id="close-item-dialog" type="button" aria-label="Close editor">×</button>
+      </div>
+      <input id="edit-item-id" type="hidden">
+      <div class="form-field">
+        <label for="edit-label">Item label</label>
+        <input id="edit-label" name="label" type="text" maxlength="160" required autocomplete="off">
+      </div>
+      <div class="form-row">
+        <div class="form-field">
+          <label for="edit-price">Replacement price (USD)</label>
+          <div class="currency-input"><span aria-hidden="true">$</span><input id="edit-price" name="replacement" type="number" min="0" max="1000000" step="0.01" required inputmode="decimal"></div>
+        </div>
+        <div class="form-field">
+          <label for="edit-condition">Condition</label>
+          <select id="edit-condition" name="condition">
+            <option value="new">New</option>
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
+            <option value="poor">Poor</option>
+          </select>
+        </div>
+      </div>
+      <label class="checkbox-field" for="edit-receipt"><input id="edit-receipt" name="receipt" type="checkbox"><span><strong>Receipt available</strong><small>Mark this only when you have supporting proof.</small></span></label>
+      <div class="edit-calculation"><span>Actual cash value after saving</span><strong id="edit-acv-preview">$0.00</strong></div>
+      <p class="form-error" id="edit-error" role="alert" hidden></p>
+      <div class="dialog-actions edit-actions">
+        <button class="text-button danger-text" id="delete-item-button" type="button">Delete item</button>
+        <div><button class="button button-quiet" id="cancel-edit-button" type="button">Cancel</button><button class="button button-gold" type="submit" value="save">Save changes</button></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog" class="dialog dialog-small" aria-labelledby="delete-dialog-title">
+    <form id="delete-form" method="dialog">
+      <div class="dialog-heading"><h2 id="delete-dialog-title">Delete this item?</h2></div>
+      <p id="delete-confirmation-copy">The item will be removed from this browser ledger and exports. Its original inventory number will not be reassigned.</p>
+      <div class="dialog-actions">
+        <button class="button button-quiet" id="cancel-delete-button" type="button">Keep item</button>
+        <button class="button button-danger" type="submit" value="delete">Delete item</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="run-toast" class="toast" role="status" aria-live="polite" hidden>
+    <span class="toast-mark" aria-hidden="true">✓</span>
+    <div><strong id="toast-title">Inventory complete</strong><p id="toast-message"></p></div>
+    <button id="dismiss-toast" class="icon-button" type="button" aria-label="Dismiss summary">×</button>
+  </div>
+</body>
+</html>

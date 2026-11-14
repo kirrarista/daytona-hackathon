@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -79,7 +80,8 @@ def test_depreciation_and_condition_math():
 def test_prepare_refinement_keeps_evidence_box_and_updates_acv():
     raw = [{"label": "Tall bookshelf", "category": "furniture", "replacement_usd": 500,
             "box": [1, 2, 499, 800], "risk": "high", "confidence": "bad"},
-            {"label": "Bad geometry", "box": [0, 0, 0, 0]}]
+            {"label": "Bad geometry", "box": [0, 0, 0, 0]},
+            {"label": "Missing geometry", "box": None}]
     items = engine.prepare_items(raw, 1200, 900, "bedroom")
     assert len(items) == 1
     before_box = items[0]["box"]
@@ -119,13 +121,13 @@ def test_engine_sandbox_cli_round_trip(tmp_path: Path):
     raw = jpeg_with_gps()
     source = tmp_path / "input.jpg"
     source.write_bytes(raw)
-    subprocess.run(["python3", "roomledger/engine.py", "sanitize", str(source), str(tmp_path / "clean.jpg"),
+    subprocess.run([sys.executable, "roomledger/engine.py", "sanitize", str(source), str(tmp_path / "clean.jpg"),
                     str(tmp_path / "meta.json")], check=True)
     detection = {"room_type": "office", "width": 80, "height": 60,
                  "items": [{"label": "Laptop", "category": "electronics", "replacement_usd": 800,
                             "box": [10, 10, 800, 800]}]}
     (tmp_path / "detection.json").write_text(json.dumps(detection))
-    subprocess.run(["python3", "roomledger/engine.py", "prepare", str(tmp_path / "clean.jpg"),
+    subprocess.run([sys.executable, "roomledger/engine.py", "prepare", str(tmp_path / "clean.jpg"),
                     str(tmp_path / "detection.json"), str(tmp_path / "prepared.json"), str(tmp_path / "crops")], check=True)
     prepared = json.loads((tmp_path / "prepared.json").read_text())
     assert prepared["items"][0]["verified"] is False

@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 import os
 import re
 import time
@@ -65,6 +66,8 @@ def _normalise(box: Any, width: int, height: int, assume_pixels: bool = False) -
         values = [float(value) for value in values]
     except (TypeError, ValueError) as exc:
         raise ValueError("Bounding box coordinates must be numeric") from exc
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("Bounding box coordinates must be finite")
     if assume_pixels or max(values) > 1000:
         values = [values[0] / width * 1000, values[1] / height * 1000, values[2] / width * 1000, values[3] / height * 1000]
     elif max(values) <= 1.5 and min(values) >= 0:
@@ -93,7 +96,7 @@ class NosanaClient:
         self.model = os.getenv("NOSANA_MODEL", "qwen3.5:9b")
         self.api_key = os.getenv("NOSANA_API_KEY", "").strip()
         self.timeout = float(os.getenv("NOSANA_TIMEOUT", "60"))
-        self.max_items = int(os.getenv("ROOMLEDGER_ITEM_CAP", "15"))
+        self.max_items = max(1, min(50, int(os.getenv("ROOMLEDGER_ITEM_CAP", "15"))))
         self.cache_dir = cache_dir
         self.cache_prefix = cache_prefix
         self.allow_mock_fallback = allow_mock_fallback
@@ -108,8 +111,19 @@ class NosanaClient:
             return self.url
         return f"{self.url}/chat/completions" if self.url.endswith("/v1") else f"{self.url}/v1/chat/completions"
 
+    @property
+    def _origin(self) -> str:
+        return "nosana" if self.configured else "mock"
+
+    @property
+    def _namespace(self) -> str:
+        if not self.configured:
+            return "offline-fixture"
+        # Endpoint secrets are never written to disk; only their SHA-256 namespace is used.
+        return "nosana-" + hashlib.sha256(self._endpoint().encode("utf-8")).hexdigest()
+
     def _cache_path(self, image: bytes, operation: str, prompt: str) -> Path:
-        digest = hashlib.sha256(operation.encode() + b"\0" + self.model.encode() + b"\0" + prompt.encode() + b"\0" + image).hexdigest()
+        digest = hashlib.sha256(self._namespace.encode() + b"\0" + operation.encode() + b"\0" + self.model.encode() + b"\0" + prompt.encode() + b"\0" + image).hexdigest()
         safe_prefix = re.sub(r"[^a-z0-9-]", "", self.cache_prefix.lower())
         return self.cache_dir / f"{safe_prefix}{digest}.json"
 
@@ -118,13 +132,16 @@ class NosanaClient:
             return None
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-            return InferenceResult(payload["data"], "cache", payload.get("model", self.model))
+            origin = payload.get("origin")
+            if origin != self._origin and not (origin == "mock" and self.allow_mock_fallback):
+                return None
+            return InferenceResult(payload["data"], "cache", payload["model"])
         except (OSError, ValueError, KeyError, TypeError):
             return None
 
-    def _save_cache(self, path: Path, data: dict[str, Any]) -> None:
+    def _save_cache(self, path: Path, data: dict[str, Any], model: str | None = None, origin: str | None = None) -> None:
         temporary = path.with_suffix(f".{os.getpid()}.{uuid.uuid4().hex}.tmp")
-        temporary.write_text(json.dumps({"model": self.model, "data": data}, ensure_ascii=False), encoding="utf-8")
+        temporary.write_text(json.dumps({"origin": origin or self._origin, "model": model or self.model, "data": data}, ensure_ascii=False), encoding="utf-8")
         temporary.replace(path)
 
     def detect(self, image: bytes) -> InferenceResult:
@@ -149,7 +166,7 @@ class NosanaClient:
                     raise
         # Mock is explicit when no endpoint is configured, or explicitly enabled as a fallback.
         parsed = self._mock_detection(image)
-        self._save_cache(cache, parsed)
+        self._save_cache(cache, parsed, "roomledger-offline-fixture", "mock")
         return InferenceResult(parsed, "mock", "roomledger-offline-fixture")
 
     def refine(self, crop: bytes, record: dict[str, Any]) -> InferenceResult:
@@ -175,7 +192,7 @@ class NosanaClient:
             "condition": record.get("condition", "good"),
             "replacement_usd": record.get("replacement_usd", 100), "confidence": 0.87,
         }
-        self._save_cache(cache, parsed)
+        self._save_cache(cache, parsed, "roomledger-offline-fixture", "mock")
         return InferenceResult(parsed, "mock", "roomledger-offline-fixture")
 
     def _vision(self, prompt: str, image: bytes, max_tokens: int) -> InferenceResult:
