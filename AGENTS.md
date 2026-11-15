@@ -23,7 +23,7 @@ Browser checks use system Chromium and save review artifacts under ignored `arti
 
 ## Invariants
 
-- Never represent local, cache, mock, or demo execution as live sponsor usage.
+- Never represent local, cache, mock, or demo execution as live sponsor usage. Bundled sample runs must always force local workers, even when Daytona/Nosana credentials are configured; preserve the regression test that forbids sandbox initialization in sample mode.
 - With Daytona enabled, decode only in sandboxes. Download merely sanitized JPEG and JSON results.
 - One shared GPU limit covers initial detection and high-value refinement. Permits are retained until cancelled background HTTP operations actually finish. One failed room must not cancel other rooms.
 - Sanitized remote workspaces are destroyed in `finally`, labelled `app=roomledger`, and constrained by a 30-minute TTL. Deletion uses `wait=True`; accepted-but-unconfirmed deletion is not “destroyed.” Startup sweep must only touch that label and sandboxes at least five minutes old, and must finish before requests are served.

@@ -58,6 +58,29 @@ def test_end_to_end_mock_sse_and_real_cache(tmp_path, monkeypatch):
             assert "base64," not in event["message"]
 
 
+def test_sample_never_uses_daytona_even_when_credentials_exist(tmp_path, monkeypatch):
+    monkeypatch.setenv("DAYTONA_API_KEY", "fixture-credential-no-network-allowed")
+    monkeypatch.delenv("NOSANA_URL", raising=False)
+    monkeypatch.setattr(application, "CACHE", tmp_path)
+    raw = image_bytes("#aa7744")
+
+    class ForbiddenSandbox:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("Sample mode attempted to initialize a Daytona worker")
+
+    monkeypatch.setattr(application, "SandboxWorker", ForbiddenSandbox)
+    with TestClient(application.app) as client:
+        # Startup cleanup reports the deliberately failed SDK initialization, but
+        # the bundled analysis must remain local and must not invoke a provider.
+        response = client.post("/api/analyze", files=[("files", ("sample-room.jpg", raw, "image/jpeg"))], data={"sample": "true"})
+    stream = events(response.text)
+    assert response.status_code == 200
+    assert stream[0]["daytona_mode"] == "local"
+    assert stream[0]["nosana_mode"] == "demo"
+    assert stream[-1] == {"type": "done", "ok": True}
+    assert any(event["type"] == "room" for event in stream)
+
+
 def test_one_bad_room_does_not_break_good_room(tmp_path, monkeypatch):
     monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
     monkeypatch.delenv("NOSANA_URL", raising=False)

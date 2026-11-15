@@ -116,7 +116,8 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
     async def emit(event: dict[str, Any]) -> None:
         await events.put(event)
 
-    daytona_live = bool(os.getenv("DAYTONA_API_KEY"))
+    # Bundled demos are strictly offline regardless of any configured provider credentials.
+    daytona_live = bool(os.getenv("DAYTONA_API_KEY")) and not sample
     client = NosanaClient(CACHE, cache_prefix="sample-" if sample else "", offline=sample,
                           allow_mock_fallback=os.getenv("ALLOW_MOCK_FALLBACK", "false").lower() == "true")
     gpu = GPUScheduler(max(1, int(os.getenv("NOSANA_CONCURRENCY", "2"))), emit, app.state.gpu_semaphore)
