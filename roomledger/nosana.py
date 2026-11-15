@@ -87,6 +87,10 @@ class InferenceResult:
     http_ms: int = 0
 
 
+FIXTURE_KEY_MODEL = "qwen3.5:9b"  # model component of the committed cache/sample-*.json keys
+FIXTURE_MODEL = "roomledger-offline-fixture"
+
+
 class NosanaClient:
     """Synchronous transport intended to be called through asyncio.to_thread."""
 
@@ -123,7 +127,10 @@ class NosanaClient:
         return "nosana-" + hashlib.sha256(self._endpoint().encode("utf-8")).hexdigest()
 
     def _cache_path(self, image: bytes, operation: str, prompt: str) -> Path:
-        digest = hashlib.sha256(self._namespace.encode() + b"\0" + operation.encode() + b"\0" + self.model.encode() + b"\0" + prompt.encode() + b"\0" + image).hexdigest()
+        # Offline fixtures are keyed independently of NOSANA_MODEL, so configuring a live
+        # model never orphans the committed sample-home cache or mints new sample files.
+        key_model = self.model if self.configured else FIXTURE_KEY_MODEL
+        digest = hashlib.sha256(self._namespace.encode() + b"\0" + operation.encode() + b"\0" + key_model.encode() + b"\0" + prompt.encode() + b"\0" + image).hexdigest()
         safe_prefix = re.sub(r"[^a-z0-9-]", "", self.cache_prefix.lower())
         return self.cache_dir / f"{safe_prefix}{digest}.json"
 

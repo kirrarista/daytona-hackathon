@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from roomledger.nosana import NosanaClient, extract_json
+from roomledger.nosana import FIXTURE_KEY_MODEL, NosanaClient, extract_json
 
 
 @pytest.mark.parametrize("raw", [
@@ -67,3 +67,16 @@ def test_mock_is_deterministic(tmp_path: Path, monkeypatch):
     second = NosanaClient(tmp_path / "b").detect(b"room image")
     assert first.data == second.data
     assert first.model == "roomledger-offline-fixture"
+
+
+def test_offline_fixture_cache_key_ignores_configured_model(tmp_path, monkeypatch):
+    """A live NOSANA_MODEL in the dotenv must not orphan the committed sample-home cache."""
+    monkeypatch.delenv("NOSANA_URL", raising=False)
+    monkeypatch.setenv("NOSANA_MODEL", FIXTURE_KEY_MODEL)
+    baseline = NosanaClient(tmp_path, cache_prefix="sample-", offline=True)._cache_path(b"image", "detect-v3", "prompt")
+    monkeypatch.setenv("NOSANA_MODEL", "some-live-model-27b")
+    configured_elsewhere = NosanaClient(tmp_path, cache_prefix="sample-", offline=True)
+    assert configured_elsewhere._cache_path(b"image", "detect-v3", "prompt") == baseline
+    monkeypatch.setenv("NOSANA_URL", "https://deployment.invalid")
+    live = NosanaClient(tmp_path)
+    assert live._cache_path(b"image", "detect-v3", "prompt") != baseline

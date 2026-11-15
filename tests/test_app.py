@@ -81,6 +81,40 @@ def test_sample_never_uses_daytona_even_when_credentials_exist(tmp_path, monkeyp
     assert any(event["type"] == "room" for event in stream)
 
 
+def test_progress_streams_before_room_finishes(tmp_path, monkeypatch):
+    """Live rooms take tens of seconds; their state events must not wait for completion."""
+    monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
+    monkeypatch.delenv("NOSANA_URL", raising=False)
+    monkeypatch.setattr(application, "CACHE", tmp_path)
+
+    class SlowWorker:
+        def __init__(self, emit, run_id):
+            self.emit = emit
+
+        async def process(self, room, name, raw, client, gpu):
+            # Like sandbox creation: the stream has drained its queue before progress arrives.
+            await application.asyncio.sleep(0.05)
+            await self.emit({"type": "state", "room": room, "state": "detecting", "sandbox": "slow-worker"})
+            await application.asyncio.sleep(0.6)
+            return {"index": room, "id": f"room-{room + 1}", "name": name, "items": []}
+
+    yielded: list[tuple[str, float]] = []
+    original = application.encode_sse
+
+    def recording(event):
+        yielded.append((event["type"], application.time.monotonic()))
+        return original(event)
+
+    monkeypatch.setattr(application, "LocalWorker", SlowWorker)
+    monkeypatch.setattr(application, "encode_sse", recording)
+    with TestClient(application.app) as client:
+        response = client.post("/api/analyze", files=[("files", ("slow.jpg", image_bytes(), "image/jpeg"))])
+    assert response.status_code == 200
+    times = {kind: stamp for kind, stamp in reversed(yielded)}  # first occurrence of each type
+    assert times["state"] - times["meta"] < 0.3, "state event was held back until the room finished"
+    assert times["room"] - times["state"] >= 0.5
+
+
 def test_one_bad_room_does_not_break_good_room(tmp_path, monkeypatch):
     monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
     monkeypatch.delenv("NOSANA_URL", raising=False)
