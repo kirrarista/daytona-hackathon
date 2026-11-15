@@ -24,10 +24,17 @@ The UI always distinguishes `Local decoding`, `offline model fixtures`, `cache`,
 
 When the corresponding settings are supplied:
 
-- **Nosana hosts the open vision model** (configured with `NOSANA_MODEL`, default `qwen3.5:9b`) through an OpenAI-compatible endpoint that detects, values, and verifies items. This is open-weights inference on decentralized GPUs—not a fallback to a big-tech vision API. `source=LIVE`, the model name, and measured HTTP latency appear only after a real response. Cache reads remain labelled cache.
+- **Nosana hosts the open vision model** (configured with `NOSANA_MODEL`, default `qwen3.5:9b`; verified live with `qwen3.8-27b` on vLLM) through an OpenAI-compatible endpoint that detects, values, and verifies items. This is open-weights inference on decentralized GPUs—not a fallback to a big-tech vision API. `source=LIVE`, the model name, and measured HTTP latency appear only after a real response. Cache reads remain labelled cache.
 - **Daytona runs one disposable sandbox per room, in parallel** (up to eight). Untrusted image decoding, EXIF/GPS stripping, cropping, price/ACV scoring, quake-risk preparation, and refinement merging all execute there. The host transports sanitized images to Nosana solely to enforce one global GPU queue across otherwise independent sandboxes. Sandboxes have a 30-minute TTL and are explicitly deleted in `finally` on success or failure.
 
-The initial build environment contained **no sponsor credentials or real room photographs**. The installed SDK was introspected and the offline flow was verified, but real Daytona creation/deletion and real Nosana vision accuracy remain a required deployment check. No live verification is claimed in this repository or the UI. A failed configured provider is an error; it never silently becomes mock output. `ALLOW_MOCK_FALLBACK` is available only for explicit development use and must remain false in a sponsor demo.
+**Live verification log (2026-11-15).** The initial build had no sponsor credentials; these checks were then run against real services:
+
+- **Nosana:** a dedicated deployment served `qwen3.8-27b` (Qwen 3.8 27B, AWQ 4-bit, vLLM, 32K context) on an NVIDIA RTX PRO 6000 Blackwell. `/v1/models` answered without an account key; `reasoning_effort: none` produced zero reasoning tokens. Live room detection took 10–15 s; each high-value re-check took ~3 s.
+- **Daytona:** full uploads through `/api/analyze` (not sample mode) of 2 and 3 rooms ran one sandbox per room in parallel (ready in ~2.5 s), honoured the shared GPU limit, and reported `destroyed` for every sandbox only after Daytona confirmed deletion; the account then listed zero sandboxes. Separately, six orphaned `app=roomledger` sandboxes were observed self-deleting exactly at their 30-minute TTL.
+- **Real photographs:** the team ran the live flow on their own room photographs; numbered boxes aligned with the real objects and high-value items returned `Verified ✓`.
+- **Found and fixed during live testing:** the SSE loop held fleet progress until each room finished (invisible locally, ~47 s freeze live); tall evidence crops were clipped in the inspector; a configured live model orphaned the committed sample cache. Each now has a regression test or a screenshot check.
+
+The 2- and 3-room Daytona runs used the bundled illustrations uploaded as ordinary photos, so they verify infrastructure, not detection accuracy. G4 in `GATES.md` stays open until a recorded live run on real photographs. A failed configured provider is an error; it never silently becomes mock output. `ALLOW_MOCK_FALLBACK` is available only for explicit development use and must remain false in a sponsor demo.
 
 ## Configure live providers
 
@@ -36,13 +43,13 @@ Copy `.env.example` to a local dotenv file, then provide:
 ```sh
 DAYTONA_API_KEY=...
 NOSANA_URL=https://your-vision-deployment.example
-NOSANA_API_KEY=...                 # required by Nosana's hosted inference API
+NOSANA_API_KEY=...                 # hosted inference API only; leave blank for a dedicated deployment
 NOSANA_MODEL=qwen3.5:9b            # replace with an actually serving VL model
 NOSANA_CONCURRENCY=2
 NOSANA_TIMEOUT=60
 ```
 
-For Nosana's hosted API, `NOSANA_URL` is the OpenAI-compatible base ending in `/v1`; a deployment base URL or full `/chat/completions` URL also works. Inspect `/models` on the serving endpoint and select a genuinely vision-capable Qwen VL-family model. The default name is configuration, **not proof that such a deployment exists**. Reasoning suppression is requested by default; one bounded retry without that field handles endpoints that reject it. Thinking tags are stripped regardless.
+For Nosana's hosted API, `NOSANA_URL` is the OpenAI-compatible base ending in `/v1`; a deployment base URL or full `/chat/completions` URL also works. **Leave `NOSANA_API_KEY` blank when `NOSANA_URL` points at your own Nosana deployment:** the client sends any configured key as a Bearer header, and a deployment runs on a third-party host, so an account key would be disclosed to that host. Check that the deployment's `/v1/models` answers without one first. Inspect `/models` on the serving endpoint and select a genuinely vision-capable Qwen VL-family model. The default name is configuration, **not proof that such a deployment exists**. Reasoning suppression is requested by default; one bounded retry without that field handles endpoints that reject it. Thinking tags are stripped regardless.
 
 Install and verify the exact provider SDK:
 
@@ -71,7 +78,7 @@ Photos (1–8)
   └─ client-side edits → printable report + CSV
 ```
 
-Every item has a stable ID. Second-pass verification replaces only the editable descriptive/value fields while retaining its original box, evidence crop, and room association. Duplicate candidates are never silently deleted. Price-band adjustments are shown with ⚠ and preserve a readable reason. Cache files contain origin/model/result JSON keyed by hashes. A live endpoint namespace is derived from its normalized URL hash, so providers and mock/live provenance cannot be exchanged silently. No photo bytes or raw endpoint credentials are cached by the server. The run-summary wording is therefore **“0 uploaded photo files retained,”** not a claim that no metadata exists. Browser memory retains the active ledger until refresh.
+Fleet states, queue counts, and logs stream as they happen, not when each room finishes; a regression test holds a room open and asserts its progress is yielded first. Every item has a stable ID. Second-pass verification replaces only the editable descriptive/value fields while retaining its original box, evidence crop, and room association. Duplicate candidates are never silently deleted. Price-band adjustments are shown with ⚠ and preserve a readable reason. Cache files contain origin/model/result JSON keyed by hashes. A live endpoint namespace is derived from its normalized URL hash, so providers and mock/live provenance cannot be exchanged silently. No photo bytes or raw endpoint credentials are cached by the server. The run-summary wording is therefore **“0 uploaded photo files retained,”** not a claim that no metadata exists. Browser memory retains the active ledger until refresh.
 
 ### Evidence and estimates
 

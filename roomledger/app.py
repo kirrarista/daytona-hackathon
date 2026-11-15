@@ -30,7 +30,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .engine import mark_duplicates
-from .nosana import NosanaClient
+from .nosana import FIXTURE_MODEL, NosanaClient
 from .workers import GPUScheduler, LocalWorker, SandboxWorker
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -126,7 +126,7 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
         started = time.monotonic()
         await emit({"type": "meta", "run_id": run_id, "daytona_mode": "live" if daytona_live else "local",
                     "nosana_mode": "demo" if sample else "configured" if client.configured else "mock",
-                    "model": client.model, "sample": sample, "parallel_limit": limit})
+                    "model": FIXTURE_MODEL if sample else client.model, "sample": sample, "parallel_limit": limit})
         if app.state.cleanup_warning:
             await emit({"type": "log", "room": -1, "level": "technical", "message": app.state.cleanup_warning})
 
@@ -146,16 +146,24 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
         destroyed_ids: set[str] = set()
         failures = 0
         pending = set(tasks)
+        getter: asyncio.Task[dict[str, Any]] | None = None
         try:
             while pending or not events.empty():
                 if not events.empty():
                     event = events.get_nowait()
                 else:
-                    await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                    # Wake on the next event OR a finished room, so live progress streams
+                    # while rooms are still running instead of when each room completes.
+                    getter = asyncio.ensure_future(events.get())
+                    done, _ = await asyncio.wait({getter, *pending}, return_when=asyncio.FIRST_COMPLETED)
                     pending = {task for task in pending if not task.done()}
-                    if events.empty():
+                    if getter not in done:
+                        # Not done means no item was taken; cancelling leaves the queue intact.
+                        getter.cancel()
+                        getter = None
                         continue
-                    event = events.get_nowait()
+                    event = getter.result()
+                    getter = None
                 if event["type"] == "room":
                     rooms.append(event["result"])
                 elif event["type"] == "state" and daytona_live and event.get("sandbox") not in (None, "creating"):
@@ -184,6 +192,8 @@ async def analyze(files: Annotated[list[UploadFile], File()], sample: Annotated[
             yield encode_sse(summary)
             yield encode_sse({"type": "done", "ok": failures == 0})
         finally:
+            if getter is not None:
+                getter.cancel()
             for task in tasks:
                 if not task.done():
                     task.cancel()
