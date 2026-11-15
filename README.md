@@ -51,7 +51,7 @@ NOSANA_TIMEOUT=60
 
 For Nosana's hosted API, `NOSANA_URL` is the OpenAI-compatible base ending in `/v1`; a deployment base URL or full `/chat/completions` URL also works. **Leave `NOSANA_API_KEY` blank when `NOSANA_URL` points at your own Nosana deployment:** the client sends any configured key as a Bearer header, and a deployment runs on a third-party host, so an account key would be disclosed to that host. Check that the deployment's `/v1/models` answers without one first. Inspect `/models` on the serving endpoint and select a genuinely vision-capable Qwen VL-family model. The default name is configuration, **not proof that such a deployment exists**. Reasoning suppression is requested by default; one bounded retry without that field handles endpoints that reject it. Thinking tags are stripped regardless.
 
-Install and verify the exact provider SDK:
+Install and verify the exact provider SDK (pinned to `daytona==0.231.1`; already included by `requirements-dev.txt`):
 
 ```sh
 .venv/bin/python -m pip install -r requirements-daytona.txt

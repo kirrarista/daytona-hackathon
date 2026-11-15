@@ -1,2 +1,3 @@
 # Install after creating the project virtual environment.
-daytona
+# Pinned: the adapter was verified against this exact SDK (see README).
+daytona==0.231.1
