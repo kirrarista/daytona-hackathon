@@ -11,7 +11,7 @@
 
 ## Verification
 
-Create an isolated virtual environment, install `requirements-dev.txt` and optionally `requirements-daytona.txt`, then run:
+Create an isolated virtual environment, install `requirements-dev.txt` (it includes `requirements-daytona.txt`, the pinned SDK the adapter tests need), then run:
 
 ```sh
 .venv/bin/python -m pytest -q
